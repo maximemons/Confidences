@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Confidences">
+  <defs>
+    <!-- Trou de serrure découpé (transparent) dans la page de devant. -->
+    <mask id="confidences-keyhole" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <circle cx="38.5" cy="30" r="5" fill="#000"/>
+      <path d="M36.2 32.5L34.9 42.5H42.1L40.8 32.5Z" fill="#000"/>
+    </mask>
+    <!-- La page de devant masque la page de derrière (y compris à travers la serrure). -->
+    <mask id="confidences-behind" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <rect x="25" y="13" width="27" height="44" rx="6" fill="#000" transform="rotate(6 38.5 35)"/>
+    </mask>
+  </defs>
+  <g mask="url(#confidences-behind)">
+    <rect x="10" y="9" width="27" height="44" rx="6" fill="none" stroke="#e3a977" stroke-width="3.2" opacity="0.7" transform="rotate(-10 23.5 31)"/>
+  </g>
+  <g transform="rotate(6 38.5 35)">
+    <rect x="25" y="13" width="27" height="44" rx="6" fill="#e3a977" mask="url(#confidences-keyhole)"/>
+  </g>
+</svg>

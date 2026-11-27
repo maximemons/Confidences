@@ -71,7 +71,7 @@ Confidences/
 │   ├── markdown.js      # moteur Markdown sans dépendance (HTML échappé)
 │   ├── app.js            # logique de index.html
 │   └── reader.js         # logique de view.html
-└── icons/
+└── icons/               # logo.svg (logo source), favicon.svg + PNG, icônes de l'application
 ```
 
 ## Mise en place Firebase

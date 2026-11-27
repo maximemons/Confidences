@@ -86,11 +86,12 @@ img {
   text-decoration: none;
 }
 
+/* Logo : deux pages empilées, une serrure sur la première (icons/logo.svg). */
 .brand__mark {
+  display: block;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  flex: 0 0 auto;
 }
 
 .user-chip {
