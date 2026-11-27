@@ -25,7 +25,16 @@ export function emptySlide() {
     id: crypto.randomUUID(),
     orientation: "portrait",
     background: { type: "color", color: "#14141c", imageUrl: "" },
-    text: { content: "", font: "Inter", color: "#f5f0e8", size: "medium", align: "center" },
+    text: {
+      content: "",
+      font: "Inter",
+      color: "#f5f0e8",
+      size: "medium",
+      align: "center",
+      boxMode: "auto",
+      boxColor: "#000000",
+      boxOpacity: 85
+    },
     image: { url: "", fit: "cover", position: "center" }
   };
 }
