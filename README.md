@@ -20,6 +20,8 @@ Site statique en JavaScript natif (pas de framework, pas de build) + Firebase (A
 
   **Transparence** : les images sans fond (PNG, WebP… avec canal alpha) restent transparentes. Elles sont réencodées en WebP transparent, ou en PNG sur Safari, qui ne sait pas produire de WebP (le JPEG, sans transparence, n'est utilisé que pour les images opaques). Une image de fond transparente laisse voir la couleur de fond choisie. Les miniatures d'import affichent un damier pour rendre la transparence visible.
 
+  **Dupliquer une page** : chaque miniature porte, en haut à droite, un bouton de duplication. La copie (texte, mise en forme, images, transition) est insérée juste après l'original et devient la page active. Comme les images sont stockées dans le document, la copie les duplique ; si la confidence dépassait alors la limite de taille, l'application propose de dupliquer la page sans ses images.
+
   L'ordre des pages se modifie avec les flèches ↑ / ↓ sous l'aperçu, ou par **glisser-déposer** dans la bande de miniatures : à la souris, on attrape une miniature et on la fait glisser ; sur mobile, on maintient le doigt appuyé sur une miniature (~0,35 s) puis on la fait glisser. La bande défile automatiquement près des bords et Échap annule le déplacement.
 
   Chaque photo (image affichée ou image de fond) peut venir :

@@ -649,6 +649,17 @@ function renderSlideStrip() {
     badge.className = "slide-thumb__index";
     badge.textContent = i + 1;
     thumb.appendChild(badge);
+    const dup = document.createElement("button");
+    dup.type = "button";
+    dup.className = "slide-thumb__action slide-thumb__duplicate";
+    dup.title = `Dupliquer la page ${i + 1}`;
+    dup.setAttribute("aria-label", `Dupliquer la page ${i + 1}`);
+    dup.innerHTML = DUPLICATE_ICON;
+    dup.addEventListener("click", (e) => {
+      e.stopPropagation();
+      duplicateSlide(i);
+    });
+    thumb.appendChild(dup);
     thumb.addEventListener("click", () => {
       state.slideIndex = i;
       renderSlideStrip();
@@ -721,6 +732,45 @@ function updateBoxControls(slide) {
     t.boxMode === "none"
       ? "Aucun fond derrière le texte."
       : "Auto : un fond uni (sombre ou clair selon la couleur du texte) apparaît uniquement quand la page a une photo.";
+}
+
+const DUPLICATE_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2.5"/><path d="M16 8V5.5A2.5 2.5 0 0 0 13.5 3h-8A2.5 2.5 0 0 0 3 5.5v8A2.5 2.5 0 0 0 5.5 16H8"/></svg>';
+
+/**
+ * Duplique une page (texte, mise en forme, images, transition) et place la
+ * copie juste après l'original. Les images étant stockées dans le document,
+ * la copie les duplique : si la confidence dépasserait la limite de Firestore,
+ * on propose de dupliquer la page sans ses images.
+ */
+async function duplicateSlide(index) {
+  const slides = state.current?.slides;
+  if (!slides?.[index]) return;
+  const copy = structuredClone(slides[index]);
+  copy.id = crypto.randomUUID();
+  slides.splice(index + 1, 0, copy);
+
+  if (estimateDocBytes() > MAX_DOC_BYTES) {
+    slides.splice(index + 1, 1);
+    const ok = await confirmModal({
+      title: "Pas assez de place",
+      message:
+        "Avec ses images, la copie dépasserait la taille maximale d'une confidence. Dupliquer la page sans ses images (texte, couleurs et mise en forme conservés) ?",
+      confirmLabel: "Dupliquer sans images"
+    });
+    if (!ok || !state.current || state.current.slides !== slides) return;
+    copy.image.url = "";
+    copy.background.imageUrl = "";
+    if (copy.background.type === "image") copy.background.type = "color";
+    const at = Math.min(slides.length, index + 1);
+    slides.splice(at, 0, copy);
+    state.slideIndex = at;
+  } else {
+    state.slideIndex = index + 1;
+  }
+  flushSave(true);
+  renderAll();
+  toast(`Page ${index + 1} dupliquée`);
 }
 
 /**

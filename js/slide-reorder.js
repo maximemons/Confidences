@@ -28,6 +28,8 @@ export function enableSlideReorder(strip, { onReorder, onCancel } = {}) {
   strip.addEventListener("pointerdown", (e) => {
     if (drag || pending) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // Les boutons posés sur une miniature (dupliquer…) ne lancent pas de déplacement.
+    if (e.target.closest(".slide-thumb__action")) return;
     const thumb = e.target.closest(".slide-thumb");
     if (!thumb || !strip.contains(thumb)) return;
     if (strip.querySelectorAll(".slide-thumb").length < 2) return;
