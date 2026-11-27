@@ -43,9 +43,19 @@ service cloud.firestore {
           && request.resource.data.completed is bool
           && request.resource.data.durationMs == 0;
 
-        // Le lecteur fait seulement avancer sa progression et sa durée.
+        // Le lecteur fait seulement avancer sa progression et sa durée, et
+        // peut laisser un avis : une note de 1 à 5 et un commentaire facultatif.
         allow update: if request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(["maxSlide", "completed", "durationMs", "lastActiveAt"])
+              .hasOnly(["maxSlide", "completed", "durationMs", "lastActiveAt", "rating", "comment", "feedbackAt"])
+          && (!("rating" in request.resource.data)
+              || (request.resource.data.rating is int
+                  && request.resource.data.rating >= 1
+                  && request.resource.data.rating <= 5))
+          && (!("comment" in request.resource.data)
+              || (request.resource.data.comment is string
+                  && request.resource.data.comment.size() <= 1000))
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["feedbackAt"])
+              || request.resource.data.feedbackAt == request.time)
           && request.resource.data.lastActiveAt == request.time
           && request.resource.data.maxSlide is int
           && request.resource.data.maxSlide >= resource.data.maxSlide

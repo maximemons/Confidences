@@ -111,6 +111,17 @@ export async function setWrittenAt(id, writtenAt) {
   });
 }
 
+export async function setFeedback(id, feedback) {
+  await updateDoc(doc(db, PRESENTATIONS, id), {
+    feedback: {
+      enabled: !!feedback.enabled,
+      message: String(feedback.message || ""),
+      allowComment: !!feedback.allowComment
+    },
+    updatedAt: serverTimestamp()
+  });
+}
+
 export async function saveSlides(id, slides) {
   await updateDoc(doc(db, PRESENTATIONS, id), {
     slides,
@@ -160,6 +171,17 @@ export async function updateViewProgress(id, viewId, { maxSlide, completed, dura
     durationMs,
     lastActiveAt: serverTimestamp()
   });
+}
+
+/** Enregistre l'avis (note 1–5 et commentaire facultatif) d'une consultation. */
+export async function updateViewFeedback(id, viewId, { rating, comment }) {
+  const data = {
+    rating,
+    feedbackAt: serverTimestamp(),
+    lastActiveAt: serverTimestamp()
+  };
+  if (comment) data.comment = comment;
+  await updateDoc(doc(db, PRESENTATIONS, id, "views", viewId), data);
 }
 
 export function watchViews(id, callback) {

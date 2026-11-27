@@ -126,6 +126,29 @@
           </div>
 
           <div class="form-card" style="margin-bottom:16px;">
+            <h3>Avis des lecteurs</h3>
+            <label class="check-field" for="field-feedback-enabled">
+              <input id="field-feedback-enabled" type="checkbox" />
+              Demander un avis à la fin
+            </label>
+            <div class="feedback-options" id="field-feedback-options" hidden>
+              <div class="field">
+                <label for="field-feedback-message">Message affiché</label>
+                <textarea id="field-feedback-message" rows="2" maxlength="300"></textarea>
+                <div class="md-meta">
+                  <button id="btn-feedback-reset" class="btn btn--ghost btn--sm" type="button">Message de base</button>
+                  <span id="field-feedback-count">0 / 300</span>
+                </div>
+              </div>
+              <label class="check-field" for="field-feedback-comment">
+                <input id="field-feedback-comment" type="checkbox" />
+                Permettre un commentaire libre
+              </label>
+              <p class="field-hint">Une page avec 5 étoiles (et un champ de commentaire si vous l'activez) est ajoutée après la dernière page, pour vos lecteurs uniquement : elle n'apparaît pas dans l'éditeur. Vous pouvez la voir avec « ▶ Aperçu ». Les notes et commentaires apparaissent dans les consultations.</p>
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-bottom:16px;">
             <h3>Orientation</h3>
             <div class="segmented" id="field-orientation">
               <button type="button" data-value="portrait">Portrait</button>

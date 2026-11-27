@@ -55,6 +55,26 @@ export function normalizeTextBox(slide) {
   return t;
 }
 
+/* ---- Avis des lecteurs (page finale facultative) ---- */
+
+export const DEFAULT_FEEDBACK_MESSAGE = "Qu'avez-vous pensé de cette confidence ? Votre avis compte pour moi.";
+export const MAX_FEEDBACK_MESSAGE = 300;
+export const MAX_FEEDBACK_COMMENT = 1000;
+
+/**
+ * Réglages de la page d'avis : désactivée par défaut (anciennes confidences),
+ * message de base si le message est vide.
+ */
+export function normalizeFeedback(value) {
+  const f = value && typeof value === "object" ? value : {};
+  const message = typeof f.message === "string" ? f.message.slice(0, MAX_FEEDBACK_MESSAGE) : "";
+  return {
+    enabled: f.enabled === true,
+    message: message.trim() ? message : DEFAULT_FEEDBACK_MESSAGE,
+    allowComment: f.allowComment === true
+  };
+}
+
 /** Transitions proposées à l'arrivée sur une page. */
 export const TRANSITION_OPTIONS = [
   { value: "none", label: "Aucune" },

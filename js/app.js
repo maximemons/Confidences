@@ -8,6 +8,7 @@ import {
   saveSlides,
   setShowTitle,
   setWrittenAt,
+  setFeedback,
   deletePresentation,
   watchViews,
   emptySlide
@@ -29,6 +30,8 @@ import {
   normalizeTextBox,
   normalizeImage,
   normalizeTransition,
+  normalizeFeedback,
+  DEFAULT_FEEDBACK_MESSAGE,
   TRANSITION_OPTIONS
 } from "./slide-render.js";
 import { playTransition, finishTransitions } from "./transitions.js";
@@ -63,6 +66,12 @@ const dashboardEmpty = document.getElementById("dashboard-empty");
 const presRows = document.getElementById("pres-rows");
 const dashboardHint = document.getElementById("dashboard-hint");
 const fieldCategory = document.getElementById("field-category");
+const fieldFeedbackEnabled = document.getElementById("field-feedback-enabled");
+const fieldFeedbackOptions = document.getElementById("field-feedback-options");
+const fieldFeedbackMessage = document.getElementById("field-feedback-message");
+const fieldFeedbackCount = document.getElementById("field-feedback-count");
+const fieldFeedbackComment = document.getElementById("field-feedback-comment");
+const btnFeedbackReset = document.getElementById("btn-feedback-reset");
 
 const editorTitle = document.getElementById("editor-title");
 const fieldShowTitle = document.getElementById("field-show-title");
@@ -788,6 +797,7 @@ async function openEditor(id) {
     title: pres.title || "Sans titre",
     showTitle: !!pres.showTitle,
     categoryId: pres.categoryId || null,
+    feedback: normalizeFeedback(pres.feedback),
     // Older confidences have no writtenAt: fall back to their creation day.
     writtenAt: pres.writtenAt || timestampToISO(pres.createdAt) || todayISO(),
     slides: pres.slides && pres.slides.length ? pres.slides : [emptySlide()]
@@ -799,6 +809,7 @@ async function openEditor(id) {
 
   editorTitle.value = state.current.title;
   renderCategorySelect();
+  renderFeedbackForm();
   fieldShowTitle.checked = state.current.showTitle;
   fieldWrittenAt.value = state.current.writtenAt;
   fieldWrittenAtWrap.hidden = !state.current.showTitle;
@@ -1273,6 +1284,71 @@ fieldBgColor.addEventListener("input", () => {
   renderPreview();
 });
 fieldBgColor.addEventListener("change", () => flushSave(true));
+
+/* ---------------- Avis des lecteurs ---------------- */
+
+function renderFeedbackForm() {
+  const f = state.current.feedback;
+  fieldFeedbackEnabled.checked = f.enabled;
+  fieldFeedbackOptions.hidden = !f.enabled;
+  if (document.activeElement !== fieldFeedbackMessage) fieldFeedbackMessage.value = f.message;
+  fieldFeedbackComment.checked = f.allowComment;
+  fieldFeedbackCount.textContent = `${fieldFeedbackMessage.value.length} / ${fieldFeedbackMessage.maxLength}`;
+}
+
+let feedbackTimer = null;
+function saveFeedback(immediate) {
+  clearTimeout(feedbackTimer);
+  if (!state.current) return;
+  const id = state.current.id;
+  const value = { ...state.current.feedback };
+  const run = () => setFeedback(id, value).catch((err) => toast(err.message, 4000));
+  if (immediate) run();
+  else feedbackTimer = setTimeout(run, 600);
+}
+
+fieldFeedbackEnabled.addEventListener("change", () => {
+  if (!state.current) return;
+  state.current.feedback.enabled = fieldFeedbackEnabled.checked;
+  renderFeedbackForm();
+  saveFeedback(true);
+  if (fieldFeedbackEnabled.checked) {
+    // Le message de base est déjà rempli : on le propose à la modification.
+    fieldFeedbackMessage.focus();
+    fieldFeedbackMessage.select();
+  }
+});
+
+fieldFeedbackMessage.addEventListener("input", () => {
+  if (!state.current) return;
+  state.current.feedback.message = fieldFeedbackMessage.value;
+  fieldFeedbackCount.textContent = `${fieldFeedbackMessage.value.length} / ${fieldFeedbackMessage.maxLength}`;
+  saveFeedback(false);
+});
+
+fieldFeedbackMessage.addEventListener("blur", () => {
+  if (!state.current) return;
+  // Un message vidé revient au message de base.
+  if (!fieldFeedbackMessage.value.trim()) {
+    state.current.feedback.message = DEFAULT_FEEDBACK_MESSAGE;
+    renderFeedbackForm();
+  }
+  saveFeedback(true);
+});
+
+btnFeedbackReset.addEventListener("click", () => {
+  if (!state.current) return;
+  state.current.feedback.message = DEFAULT_FEEDBACK_MESSAGE;
+  fieldFeedbackMessage.value = DEFAULT_FEEDBACK_MESSAGE;
+  renderFeedbackForm();
+  saveFeedback(true);
+});
+
+fieldFeedbackComment.addEventListener("change", () => {
+  if (!state.current) return;
+  state.current.feedback.allowComment = fieldFeedbackComment.checked;
+  saveFeedback(true);
+});
 
 /* ---------------- Champs couleur (HEX + couleurs récentes) ---------------- */
 
@@ -1863,6 +1939,15 @@ function hasDetails(v) {
   return Number.isFinite(v.slideCount) && Number.isFinite(v.maxSlide);
 }
 
+function hasRating(v) {
+  return Number.isInteger(v.rating) && v.rating >= 1 && v.rating <= 5;
+}
+
+/** Étoiles pleines et vides, pour l'affichage d'une note. */
+function starsHtml(rating) {
+  return `<span class="stars" aria-hidden="true">${"★".repeat(rating)}<span class="stars__off">${"★".repeat(5 - rating)}</span></span>`;
+}
+
 function renderViewsSummary(list) {
   const detailed = list.filter(hasDetails);
   if (!detailed.length) {
@@ -1890,8 +1975,20 @@ function renderViewsSummary(list) {
     <div class="views-summary__item">
       <span class="views-summary__value">${escapeHtml(deviceText || "—")}</span>
       <span class="views-summary__label">appareils</span>
-    </div>`;
+    </div>${ratingSummaryHtml(list)}`;
   viewsSummary.hidden = false;
+}
+
+function ratingSummaryHtml(list) {
+  const rated = list.filter(hasRating);
+  if (!rated.length) return "";
+  const avg = rated.reduce((sum, v) => sum + v.rating, 0) / rated.length;
+  const comments = list.filter((v) => hasRating(v) && v.comment).length;
+  return `
+    <div class="views-summary__item">
+      <span class="views-summary__value">${avg.toFixed(1).replace(".", ",")} / 5 ${starsHtml(Math.round(avg))}</span>
+      <span class="views-summary__label">note moyenne · ${rated.length} avis${comments ? ` · ${comments} commentaire${comments > 1 ? "s" : ""}` : ""}</span>
+    </div>`;
 }
 
 function renderViews(list) {
@@ -1939,6 +2036,19 @@ function renderViews(list) {
       meta.className = "view-item__meta view-item__meta--legacy";
       meta.textContent = "Détails non disponibles (consultation antérieure aux statistiques)";
       li.appendChild(meta);
+    }
+
+    if (hasRating(v)) {
+      const fb = document.createElement("div");
+      fb.className = "view-item__feedback";
+      fb.innerHTML = `<div class="view-item__rating" title="Note donnée par le lecteur">${starsHtml(v.rating)}<span class="view-item__rating-text">${v.rating} / 5</span></div>`;
+      if (v.comment) {
+        const q = document.createElement("blockquote");
+        q.className = "view-item__comment";
+        q.textContent = v.comment;
+        fb.appendChild(q);
+      }
+      li.appendChild(fb);
     }
 
     viewsList.appendChild(li);

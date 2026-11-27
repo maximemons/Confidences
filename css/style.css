@@ -623,7 +623,7 @@ html.is-dragging-slide body {
 
 .views-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
   margin-top: 10px;
 }
@@ -1827,4 +1827,58 @@ html.is-dragging-card * {
 .category-field select {
   flex: 1;
   min-width: 0;
+}
+
+/* --- Avis des lecteurs --- */
+
+.feedback-options {
+  margin-top: 14px;
+}
+
+.feedback-options textarea {
+  min-height: 0;
+}
+
+.feedback-options .check-field {
+  margin-bottom: 0;
+}
+
+.stars {
+  color: #f4c15d;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.stars__off {
+  color: var(--border);
+}
+
+.view-item__feedback {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.view-item__rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.view-item__rating-text {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.view-item__comment {
+  margin: 6px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--accent);
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

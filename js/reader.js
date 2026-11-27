@@ -1,5 +1,12 @@
-import { getPresentation, logView, updateViewProgress } from "./presentations.js";
-import { renderSlide, timestampToISO, deckOrientation, normalizeTransition } from "./slide-render.js";
+import { getPresentation, logView, updateViewProgress, updateViewFeedback } from "./presentations.js";
+import {
+  renderSlide,
+  timestampToISO,
+  deckOrientation,
+  normalizeTransition,
+  normalizeFeedback,
+  MAX_FEEDBACK_COMMENT
+} from "./slide-render.js";
 import { playTransition } from "./transitions.js";
 import { watchAuth } from "./auth.js";
 
@@ -25,10 +32,23 @@ let hintTimer = null;
 // Calque de la page affichée ; chaque changement de page crée un nouveau calque
 // pour que la transition puisse animer l'ancienne et la nouvelle page ensemble.
 let currentLayer = elContent;
+// Page d'avis facultative, ajoutée après la dernière page (jamais dans l'éditeur).
+let feedback = normalizeFeedback(null);
+let ownerMode = false;
+const feedbackState = { rating: 0, comment: "", sent: false, sending: false, error: "" };
+
+/** Nombre de pages affichées : les pages de la confidence, plus la page d'avis. */
+function pageCount() {
+  return slides.length + (feedback.enabled ? 1 : 0);
+}
+
+function isFeedbackPage(i) {
+  return feedback.enabled && i === slides.length;
+}
 
 function buildProgress() {
   elProgress.innerHTML = "";
-  slides.forEach(() => {
+  Array.from({ length: pageCount() }).forEach(() => {
     const seg = document.createElement("div");
     seg.className = "reader__progress-seg";
     const fill = document.createElement("div");
@@ -80,7 +100,21 @@ const tracker = {
   timer: null,
   heartbeat: null,
 
-  async start(presentationId, slideCount) {
+  ready: null,
+
+  start(presentationId, slideCount) {
+    this.ready = this.begin(presentationId, slideCount);
+    return this.ready;
+  },
+
+  /** Envoie l'avis du lecteur sur la consultation en cours. */
+  async sendFeedback(rating, comment) {
+    await this.ready;
+    if (!this.viewId) throw new Error("no-view");
+    await updateViewFeedback(this.presentationId, this.viewId, { rating, comment });
+  },
+
+  async begin(presentationId, slideCount) {
     this.presentationId = presentationId;
     this.slideCount = slideCount;
     this.maxSlide = 1;
@@ -153,6 +187,130 @@ const tracker = {
   }
 };
 
+/* ---- Page d'avis ---- */
+
+const STAR_PATH =
+  "M12 2.8l2.84 5.76 6.36.92-4.6 4.49 1.09 6.33L12 17.31l-5.69 2.99 1.09-6.33-4.6-4.49 6.36-.92z";
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/**
+ * Dessine la page d'avis : le fond de la dernière page, puis un panneau avec
+ * le message de l'auteur, 5 étoiles et (si demandé) un commentaire libre.
+ */
+function renderFeedbackPage(target) {
+  const last = slides[slides.length - 1];
+  renderSlide(target, { orientation: last.orientation, background: last.background, text: {}, image: {} });
+
+  const wrap = el("div", "feedback");
+  const panel = el("div", "feedback__panel");
+  panel.style.fontFamily = `"${last.text?.font || "Inter"}", system-ui, sans-serif`;
+  wrap.appendChild(panel);
+  target.appendChild(wrap);
+
+  panel.appendChild(el("p", "feedback__message", feedback.message));
+
+  const stars = el("div", "feedback__stars");
+  stars.setAttribute("role", "radiogroup");
+  stars.setAttribute("aria-label", "Votre note, de 1 à 5 étoiles");
+  const starButtons = [];
+  const paint = (value) => {
+    starButtons.forEach((b, k) => {
+      b.classList.toggle("is-on", k < value);
+      b.setAttribute("aria-checked", String(k + 1 === feedbackState.rating));
+    });
+  };
+  for (let n = 1; n <= 5; n++) {
+    const b = el("button", "feedback__star");
+    b.type = "button";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-label", `${n} étoile${n > 1 ? "s" : ""}`);
+    b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}"></path></svg>`;
+    b.disabled = feedbackState.sent;
+    b.addEventListener("click", () => {
+      feedbackState.rating = n;
+      feedbackState.error = "";
+      paint(n);
+      updateSend();
+    });
+    b.addEventListener("pointerenter", () => !feedbackState.sent && paint(n));
+    b.addEventListener("pointerleave", () => paint(feedbackState.rating));
+    starButtons.push(b);
+    stars.appendChild(b);
+  }
+  panel.appendChild(stars);
+  paint(feedbackState.rating);
+
+  if (feedbackState.sent) {
+    renderFeedbackPage.updateSend = null;
+    panel.appendChild(el("p", "feedback__thanks", "Merci ! Votre avis a bien été envoyé."));
+  } else {
+    let textarea = null;
+    if (feedback.allowComment) {
+      const label = el("label", "feedback__label", "Un mot pour l'auteur (facultatif)");
+      textarea = el("textarea", "feedback__comment");
+      textarea.maxLength = MAX_FEEDBACK_COMMENT;
+      textarea.rows = 3;
+      textarea.placeholder = "Votre commentaire…";
+      textarea.value = feedbackState.comment;
+      const id = "feedback-comment";
+      textarea.id = id;
+      label.htmlFor = id;
+      textarea.addEventListener("input", () => {
+        feedbackState.comment = textarea.value;
+      });
+      panel.append(label, textarea);
+    }
+
+    const send = el("button", "feedback__send", "Envoyer mon avis");
+    send.type = "button";
+    const status = el("p", "feedback__status");
+    status.setAttribute("role", "status");
+    const updateSend = () => {
+      send.disabled = ownerMode || feedbackState.sending || !feedbackState.rating;
+      status.textContent = ownerMode
+        ? "Aperçu créateur : votre avis n'est pas enregistré."
+        : feedbackState.error || (feedbackState.rating ? "" : "Choisissez une note pour envoyer votre avis.");
+    };
+    // Le bouton est mis à jour par les étoiles.
+    renderFeedbackPage.updateSend = updateSend;
+    send.addEventListener("click", async () => {
+      if (ownerMode || !feedbackState.rating || feedbackState.sending) return;
+      feedbackState.sending = true;
+      send.textContent = "Envoi…";
+      updateSend();
+      try {
+        await tracker.sendFeedback(feedbackState.rating, (feedbackState.comment || "").trim());
+        feedbackState.sent = true;
+        feedbackState.sending = false;
+        // Redessine la page en mode « merci » (étoiles figées).
+        renderFeedbackPage(target);
+      } catch {
+        feedbackState.sending = false;
+        feedbackState.error = "L'envoi n'a pas abouti. Vérifiez votre connexion et réessayez.";
+        send.textContent = "Envoyer mon avis";
+        updateSend();
+      }
+    });
+    panel.append(send, status);
+    updateSend();
+  }
+
+  const back = el("button", "feedback__back", "‹ Revoir la confidence");
+  back.type = "button";
+  back.addEventListener("click", () => goTo(0));
+  panel.appendChild(back);
+
+  function updateSend() {
+    renderFeedbackPage.updateSend?.();
+  }
+}
+
 function slideOptionsFor(i) {
   return showTitle && i === 0 ? { title, date: writtenAt } : {};
 }
@@ -164,27 +322,39 @@ function slideOptionsFor(i) {
 function showSlide(i, { animate = true } = {}) {
   const from = index;
   index = i;
-  const slide = slides[index];
+  const feedbackPage = isFeedbackPage(index);
+  const slide = feedbackPage ? slides[slides.length - 1] : slides[index];
   elFrame.classList.remove("slide--portrait", "slide--paysage");
   elFrame.classList.add(slide.orientation === "paysage" ? "slide--paysage" : "slide--portrait");
+  // Sur la page d'avis, les zones de tap ne doivent pas capter les clics du formulaire.
+  elFrame.classList.toggle("is-feedback", feedbackPage);
   updateProgress();
   if (elOwnerSelect) elOwnerSelect.value = String(index);
   tracker.onSlide(index);
 
+  const draw = (target) => {
+    if (feedbackPage) renderFeedbackPage(target);
+    else renderSlide(target, slide, slideOptionsFor(index));
+  };
+
   if (!animate || from === i) {
-    renderSlide(currentLayer, slide, slideOptionsFor(index));
+    draw(currentLayer);
     return;
   }
 
   const layer = document.createElement("div");
   layer.className = "reader__content";
-  renderSlide(layer, slide, slideOptionsFor(index));
+  draw(layer);
   elFrame.insertBefore(layer, elProgress);
 
   const previous = currentLayer;
   currentLayer = layer;
   const direction = i > from ? 1 : -1;
-  const transition = normalizeTransition(direction > 0 ? slides[i] : slides[from]);
+  // La page d'avis arrive (et repart) en fondu.
+  const transition =
+    isFeedbackPage(i) || isFeedbackPage(from)
+      ? { type: "fade", speed: "normal" }
+      : normalizeTransition(direction > 0 ? slides[i] : slides[from]);
   playTransition({
     stage: elFrame,
     fromEl: previous,
@@ -204,7 +374,7 @@ function bounce(direction) {
 
 function goTo(i) {
   dismissHint();
-  if (i < 0 || i >= slides.length) {
+  if (i < 0 || i >= pageCount()) {
     bounce(i < 0 ? -1 : 1);
     return;
   }
@@ -281,6 +451,8 @@ elTapNext.addEventListener("click", next);
 
 document.addEventListener("keydown", (e) => {
   if (e.target === elOwnerSelect) return;
+  // Les flèches servent au curseur pendant la saisie d'un commentaire.
+  if (e.target.closest?.("textarea, input, button")) return;
   if (e.key === "ArrowRight") next();
   if (e.key === "ArrowLeft") prev();
 });
@@ -289,7 +461,8 @@ let touchStartX = null;
 elReader.addEventListener(
   "touchstart",
   (e) => {
-    touchStartX = e.touches[0].clientX;
+    // Un glissement commencé dans le formulaire d'avis ne change pas de page.
+    touchStartX = e.target.closest?.(".feedback__panel") ? null : e.touches[0].clientX;
   },
   { passive: true }
 );
@@ -341,6 +514,12 @@ function setupOwnerBar() {
     opt.textContent = `Page ${i + 1} / ${slides.length}${firstLine ? ` — ${firstLine.slice(0, 32)}` : ""}`;
     elOwnerSelect.appendChild(opt);
   });
+  if (feedback.enabled) {
+    const opt = document.createElement("option");
+    opt.value = String(slides.length);
+    opt.textContent = "Page d'avis (ajoutée à la fin)";
+    elOwnerSelect.appendChild(opt);
+  }
   elOwnerSelect.value = String(index);
   elOwnerSelect.addEventListener("change", () => {
     goTo(Number(elOwnerSelect.value));
@@ -377,6 +556,8 @@ async function init() {
   showTitle = !!presentation.showTitle;
   writtenAt = presentation.writtenAt || timestampToISO(presentation.createdAt);
   if (title) document.title = title;
+  feedback = normalizeFeedback(presentation.feedback);
+  ownerMode = isOwner;
   buildProgress();
 
   // Page de départ (`?slide=3`) : réservée au créateur, les lecteurs commencent
@@ -384,7 +565,7 @@ async function init() {
   let start = 0;
   if (isOwner) {
     const wanted = parseInt(params.get("slide"), 10);
-    if (Number.isFinite(wanted)) start = Math.min(slides.length, Math.max(1, wanted)) - 1;
+    if (Number.isFinite(wanted)) start = Math.min(pageCount(), Math.max(1, wanted)) - 1;
   }
   index = start;
   startIndex = start;
