@@ -1,5 +1,5 @@
 import { getPresentation, logView } from "./presentations.js";
-import { renderSlide, timestampToISO } from "./slide-render.js";
+import { renderSlide, timestampToISO, deckOrientation } from "./slide-render.js";
 
 const elLoading = document.getElementById("reader-loading");
 const elError = document.getElementById("reader-error");
@@ -124,7 +124,9 @@ async function init() {
     return fail();
   }
 
-  slides = presentation.slides;
+  // Toutes les pages suivent l'orientation de la première.
+  const orientation = deckOrientation(presentation.slides);
+  slides = presentation.slides.map((slide) => ({ ...slide, orientation }));
   title = (presentation.title || "").trim();
   showTitle = !!presentation.showTitle;
   writtenAt = presentation.writtenAt || timestampToISO(presentation.createdAt);
