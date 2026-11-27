@@ -62,7 +62,7 @@
       <div class="editor-topbar">
         <button id="btn-back" class="btn btn--ghost btn--icon" type="button" title="Retour" aria-label="Retour">←</button>
         <input id="editor-title" class="editor-topbar__title" type="text" maxlength="80" placeholder="Nom de la confidence" />
-        <button id="btn-preview" class="btn btn--ghost btn--sm" type="button">▶ Aperçu</button>
+        <button id="btn-preview" class="btn btn--ghost btn--sm" type="button" title="Ouvrir la lecture à la page affichée (non comptée)">▶ Aperçu</button>
         <button id="btn-delete-pres" class="btn btn--danger btn--sm" type="button">Supprimer</button>
       </div>
 
@@ -234,7 +234,7 @@
                 <button type="button" data-value="contain">Ajuster</button>
               </div>
             </div>
-            <div class="field" style="margin-bottom:0;">
+            <div class="field">
               <label>Position</label>
               <div class="segmented" id="field-image-position">
                 <button type="button" data-value="top">Haut</button>
@@ -242,6 +242,46 @@
                 <button type="button" data-value="bottom">Bas</button>
               </div>
             </div>
+            <div class="field range-field">
+              <label for="field-image-scale">Taille <span class="range-field__value"><span id="field-image-scale-value">100</span> %</span></label>
+              <input id="field-image-scale" type="range" min="10" max="100" step="1" value="100" />
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <div class="border-options">
+                <div class="field range-field">
+                  <label for="field-image-border-width">Contour <span class="range-field__value" id="field-image-border-width-value">Aucun</span></label>
+                  <input id="field-image-border-width" type="range" min="0" max="10" step="0.5" value="0" />
+                </div>
+                <div class="field">
+                  <label for="field-image-border-color">Couleur</label>
+                  <input id="field-image-border-color" type="color" value="#ffffff" />
+                </div>
+              </div>
+              <p class="field-hint" style="margin-top:8px;">Avec « Ajuster », le contour épouse l'image entière ; avec « Remplir », il entoure le cadre.</p>
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-top:16px;">
+            <h3>Transition</h3>
+            <div class="transition-row">
+              <div class="field">
+                <label for="field-transition">Effet à l'arrivée sur cette page</label>
+                <select id="field-transition"></select>
+              </div>
+            </div>
+            <div class="field" style="margin:14px 0 0;">
+              <label>Vitesse</label>
+              <div class="segmented" id="field-transition-speed">
+                <button type="button" data-value="fast">Rapide</button>
+                <button type="button" data-value="normal">Normale</button>
+                <button type="button" data-value="slow">Lente</button>
+              </div>
+            </div>
+            <div class="transition-actions">
+              <button id="btn-transition-test" class="btn btn--sm" type="button">▶ Tester dans l'aperçu</button>
+              <button id="btn-transition-all" class="btn btn--ghost btn--sm" type="button">Appliquer à toutes les pages</button>
+            </div>
+            <p class="field-hint" style="margin-top:10px;">En revenant en arrière, l'effet est joué à l'envers.</p>
           </div>
 
           <div class="form-card views-panel">

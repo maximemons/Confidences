@@ -19,8 +19,12 @@ import {
   todayISO,
   timestampToISO,
   deckOrientation,
-  normalizeTextBox
+  normalizeTextBox,
+  normalizeImage,
+  normalizeTransition,
+  TRANSITION_OPTIONS
 } from "./slide-render.js";
+import { playTransition, finishTransitions } from "./transitions.js";
 import { enableSlideReorder } from "./slide-reorder.js";
 
 // Limite technique de Firestore : 1 Mio (1 048 576 octets) par document.
@@ -79,6 +83,15 @@ const fieldImagePreview = document.getElementById("field-image-preview");
 const fieldImageFit = document.getElementById("field-image-fit");
 const fieldImagePosition = document.getElementById("field-image-position");
 const btnRemoveImage = document.getElementById("btn-remove-image");
+const fieldImageScale = document.getElementById("field-image-scale");
+const fieldImageScaleValue = document.getElementById("field-image-scale-value");
+const fieldImageBorderWidth = document.getElementById("field-image-border-width");
+const fieldImageBorderWidthValue = document.getElementById("field-image-border-width-value");
+const fieldImageBorderColor = document.getElementById("field-image-border-color");
+const fieldTransition = document.getElementById("field-transition");
+const fieldTransitionSpeed = document.getElementById("field-transition-speed");
+const btnTransitionTest = document.getElementById("btn-transition-test");
+const btnTransitionAll = document.getElementById("btn-transition-all");
 
 const toastEl = document.getElementById("toast");
 const modalRoot = document.getElementById("modal-root");
@@ -184,6 +197,17 @@ function buildShareLink(id) {
   return url.toString();
 }
 
+/**
+ * Lien d'aperçu du créateur, ouvert à une page précise (1 = première).
+ * Le paramètre `slide` n'est appliqué par le lecteur que pour le créateur
+ * connecté ; ses lectures ne sont pas comptées.
+ */
+function buildPreviewLink(id, slideNumber = 1) {
+  const url = new URL(buildShareLink(id));
+  if (slideNumber > 1) url.searchParams.set("slide", String(slideNumber));
+  return url.toString();
+}
+
 function setSegmentedActive(container, value) {
   container.querySelectorAll("button[data-value]").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.value === value);
@@ -282,7 +306,7 @@ function renderDashboard() {
       </div>`;
     card.querySelector('[data-action="edit"]').addEventListener("click", () => openEditor(pres.id));
     card.querySelector('[data-action="preview"]').addEventListener("click", () => {
-      window.open(buildShareLink(pres.id), "_blank");
+      window.open(buildPreviewLink(pres.id), "_blank");
     });
     card.querySelector('[data-action="copy"]').addEventListener("click", () => copyLink(pres.id));
     card.querySelector('[data-action="qr"]').addEventListener("click", () => showQrModal(buildShareLink(pres.id), pres.title));
@@ -406,7 +430,9 @@ function backToDashboard() {
 document.getElementById("btn-back").addEventListener("click", backToDashboard);
 
 document.getElementById("btn-preview").addEventListener("click", () => {
-  window.open(shareLink.value, "_blank");
+  if (!state.current) return;
+  flushSave(true);
+  window.open(buildPreviewLink(state.current.id, state.slideIndex + 1), "_blank");
 });
 
 document.getElementById("btn-copy-link").addEventListener("click", () => {
@@ -507,6 +533,7 @@ function applyOrientation(orientation) {
 
 /** Redessine l'aperçu de la page courante et signale un texte qui déborde. */
 function renderPreview() {
+  finishTransitions(previewSlide);
   renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
   fitStickyPreview();
   checkTextOverflow();
@@ -633,8 +660,19 @@ function renderPreviewAndForm() {
   normalizeTextBox(slide);
   setSegmentedActive(fieldBoxMode, slide.text.boxMode);
   updateBoxControls(slide);
-  setSegmentedActive(fieldImageFit, slide.image.fit);
-  setSegmentedActive(fieldImagePosition, slide.image.position);
+  const im = normalizeImage(slide);
+  setSegmentedActive(fieldImageFit, im.fit);
+  setSegmentedActive(fieldImagePosition, im.position);
+  fieldImageScale.value = im.scale;
+  fieldImageScaleValue.textContent = im.scale;
+  fieldImageBorderWidth.value = im.borderWidth;
+  updateBorderWidthLabel(im.borderWidth);
+  fieldImageBorderColor.value = im.borderColor;
+  fieldImageBorderColor.disabled = im.borderWidth === 0;
+  const tr = normalizeTransition(slide);
+  fieldTransition.value = tr.type;
+  setSegmentedActive(fieldTransitionSpeed, tr.speed);
+  fieldTransitionSpeed.classList.toggle("is-disabled", tr.type === "none");
 
   fieldBgColorWrap.hidden = slide.background.type !== "color";
   fieldBgImageWrap.hidden = slide.background.type !== "image";
@@ -1035,6 +1073,134 @@ wireSegmented(fieldImagePosition, (value) => {
   currentSlide().image.position = value;
   flushSave(true);
   renderAll();
+});
+
+/* ---------------- Taille et contour de l'image ---------------- */
+
+function updateBorderWidthLabel(width) {
+  fieldImageBorderWidthValue.textContent =
+    width > 0 ? `${String(width).replace(".", ",")}` : "Aucun";
+}
+
+fieldImageScale.addEventListener("input", () => {
+  const im = normalizeImage(currentSlide());
+  im.scale = Number(fieldImageScale.value);
+  fieldImageScaleValue.textContent = im.scale;
+  renderPreview();
+});
+fieldImageScale.addEventListener("change", () => {
+  flushSave(true);
+  renderSlideStrip();
+});
+
+fieldImageBorderWidth.addEventListener("input", () => {
+  const im = normalizeImage(currentSlide());
+  im.borderWidth = Number(fieldImageBorderWidth.value);
+  updateBorderWidthLabel(im.borderWidth);
+  fieldImageBorderColor.disabled = im.borderWidth === 0;
+  renderPreview();
+});
+fieldImageBorderWidth.addEventListener("change", () => {
+  flushSave(true);
+  renderSlideStrip();
+});
+
+fieldImageBorderColor.addEventListener("input", () => {
+  normalizeImage(currentSlide()).borderColor = fieldImageBorderColor.value;
+  renderPreview();
+});
+fieldImageBorderColor.addEventListener("change", () => {
+  flushSave(true);
+  renderSlideStrip();
+});
+
+/* ---------------- Transitions ---------------- */
+
+TRANSITION_OPTIONS.forEach((t) => {
+  const opt = document.createElement("option");
+  opt.value = t.value;
+  opt.textContent = t.label;
+  fieldTransition.appendChild(opt);
+});
+
+fieldTransition.addEventListener("change", () => {
+  const tr = normalizeTransition(currentSlide());
+  tr.type = fieldTransition.value;
+  fieldTransitionSpeed.classList.toggle("is-disabled", tr.type === "none");
+  flushSave(true);
+  if (tr.type !== "none") testTransition();
+});
+
+wireSegmented(fieldTransitionSpeed, (value) => {
+  normalizeTransition(currentSlide()).speed = value;
+  flushSave(true);
+  if (normalizeTransition(currentSlide()).type !== "none") testTransition();
+});
+
+/**
+ * Joue la transition de la page courante dans l'aperçu : on part de la page
+ * précédente (ou d'un écran noir pour la première page).
+ */
+function testTransition() {
+  if (!state.current) return;
+  const slide = currentSlide();
+  const tr = normalizeTransition(slide);
+  if (tr.type === "none") {
+    toast("Choisissez d'abord un effet.");
+    return;
+  }
+  finishTransitions(previewSlide);
+  previewSlide.innerHTML = "";
+
+  const fromEl = document.createElement("div");
+  fromEl.className = "slide-layer";
+  const prevIndex = state.slideIndex - 1;
+  if (prevIndex >= 0) {
+    renderSlide(fromEl, state.current.slides[prevIndex], slideOptions(prevIndex));
+  } else {
+    fromEl.style.background = "#000";
+  }
+  const toEl = document.createElement("div");
+  toEl.className = "slide-layer";
+  renderSlide(toEl, slide, slideOptions(state.slideIndex));
+  // renderSlide pose les classes d'orientation sur les calques : on les retire
+  // pour qu'ils suivent simplement la taille de l'aperçu.
+  [fromEl, toEl].forEach((el) => el.classList.remove("slide--portrait", "slide--paysage"));
+  previewSlide.append(fromEl, toEl);
+
+  playTransition({
+    stage: previewSlide,
+    fromEl,
+    toEl,
+    type: tr.type,
+    speed: tr.speed,
+    direction: 1
+  }).then(() => {
+    // Ne redessine que si aucun autre rendu n'a eu lieu entre-temps.
+    if (toEl.isConnected && state.current && slide === currentSlide()) {
+      renderSlide(previewSlide, slide, slideOptions(state.slideIndex));
+      checkTextOverflow();
+    }
+  });
+}
+
+btnTransitionTest.addEventListener("click", testTransition);
+
+btnTransitionAll.addEventListener("click", async () => {
+  if (!state.current) return;
+  const tr = normalizeTransition(currentSlide());
+  const label = TRANSITION_OPTIONS.find((o) => o.value === tr.type)?.label || tr.type;
+  const ok = await confirmModal({
+    title: "Appliquer à toutes les pages ?",
+    message: `Toutes les pages utiliseront la transition « ${escapeHtml(label)} ».`,
+    confirmLabel: "Appliquer"
+  });
+  if (!ok || !state.current) return;
+  state.current.slides.forEach((s) => {
+    s.transition = { type: tr.type, speed: tr.speed };
+  });
+  flushSave(true);
+  toast("Transition appliquée à toutes les pages");
 });
 
 function renderViews(list) {

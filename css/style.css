@@ -594,12 +594,28 @@ html.is-dragging-slide body {
 .slide__image-wrap {
   position: absolute;
   inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Les tailles et contours d'image sont exprimés en % de la page (cqw/cqh/cqmin). */
+  container-type: size;
+}
+
+.slide__image-wrap--top {
+  align-items: flex-start;
+}
+
+.slide__image-wrap--bottom {
+  align-items: flex-end;
 }
 
 .slide__image {
   width: 100%;
   height: 100%;
+  max-width: none;
+  flex: 0 0 auto;
   display: block;
+  box-sizing: border-box;
 }
 
 .slide__image--cover {
@@ -977,7 +993,8 @@ html.is-dragging-slide body {
   min-width: 160px;
 }
 
-.box-options input[type="range"] {
+.box-options input[type="range"],
+.range-field input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
 }
@@ -1106,4 +1123,79 @@ html.is-dragging-slide body {
   .pres-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* --- Curseurs (taille d'image, contour) --- */
+
+.range-field label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.range-field__value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.range-field input[type="range"] {
+  width: 100%;
+}
+
+.border-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: flex-end;
+}
+
+.border-options .field {
+  margin-bottom: 0;
+}
+
+.border-options .range-field {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* --- Transitions --- */
+
+.transition-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.transition-row .field {
+  margin-bottom: 0;
+}
+
+.transition-row .field:first-child {
+  flex: 1;
+  min-width: 140px;
+}
+
+.transition-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+/* Calques utilisés pour jouer une transition (aperçu de l'éditeur et lecteur). */
+.slide-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+}
+
+.segmented.is-disabled {
+  opacity: 0.45;
+}
+
+input[type="color"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

@@ -55,6 +55,64 @@ export function normalizeTextBox(slide) {
   return t;
 }
 
+/** Transitions proposées à l'arrivée sur une page. */
+export const TRANSITION_OPTIONS = [
+  { value: "none", label: "Aucune" },
+  { value: "fade", label: "Fondu" },
+  { value: "slide", label: "Glissement" },
+  { value: "rise", label: "Montée" },
+  { value: "zoom", label: "Zoom" },
+  { value: "flip", label: "Pivot" },
+  { value: "blur", label: "Flou" }
+];
+
+export const TRANSITION_SPEEDS = { fast: 280, normal: 500, slow: 900 };
+
+/**
+ * Complète les réglages d'image pour les pages créées avant ces options :
+ * taille 100 % et pas de contour, donc leur rendu ne change pas.
+ */
+export function normalizeImage(slide) {
+  const im = slide.image || (slide.image = { url: "" });
+  if (!["cover", "contain"].includes(im.fit)) im.fit = "cover";
+  if (!["top", "center", "bottom"].includes(im.position)) im.position = "center";
+  const scale = Number(im.scale);
+  im.scale = Number.isFinite(scale) ? Math.min(100, Math.max(10, Math.round(scale))) : 100;
+  const bw = Number(im.borderWidth);
+  im.borderWidth = Number.isFinite(bw) ? Math.min(10, Math.max(0, Math.round(bw * 2) / 2)) : 0;
+  if (!/^#[0-9a-f]{6}$/i.test(im.borderColor || "")) im.borderColor = "#ffffff";
+  return im;
+}
+
+/** Complète les réglages de transition (anciennes pages : aucune transition). */
+export function normalizeTransition(slide) {
+  const t = slide.transition || (slide.transition = {});
+  if (!TRANSITION_OPTIONS.some((o) => o.value === t.type)) t.type = "none";
+  if (!(t.speed in TRANSITION_SPEEDS)) t.speed = "normal";
+  return t;
+}
+
+/**
+ * Dimensionne l'image en unités de conteneur (cqw / cqh) : la taille reste
+ * proportionnelle à la page, quelle que soit la taille d'affichage.
+ * - "Remplir" : un cadre de N % de la page, rempli par l'image (recadrée) ;
+ * - "Ajuster" : l'image entière, aux proportions d'origine, tient dans ce cadre
+ *   (le contour épouse donc l'image et non le cadre).
+ */
+function applyImageSize(img, im) {
+  const s = im.scale;
+  img.style.width = `${s}cqw`;
+  img.style.height = `${s}cqh`;
+  if (im.fit !== "contain") return;
+  const fit = () => {
+    const r = img.naturalWidth / img.naturalHeight;
+    if (!r || !Number.isFinite(r)) return;
+    img.style.width = `min(${s}cqw, ${+(s * r).toFixed(3)}cqh)`;
+    img.style.height = `min(${s}cqh, ${+(s / r).toFixed(3)}cqw)`;
+  };
+  img.addEventListener("load", fit, { once: true });
+}
+
 function hexToRgb(hex) {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
   return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0];
@@ -116,12 +174,19 @@ export function renderSlide(container, slide, options = {}) {
   container.appendChild(bg);
 
   if (slide.image?.url) {
+    const im = normalizeImage(slide);
     const wrap = document.createElement("div");
-    wrap.className = "slide__image-wrap";
+    wrap.className = `slide__image-wrap slide__image-wrap--${im.position}`;
     const img = document.createElement("img");
-    img.className = `slide__image slide__image--${slide.image.fit || "cover"}`;
-    const position = slide.image.position || "center";
-    img.style.objectPosition = position === "top" ? "center top" : position === "bottom" ? "center bottom" : "center center";
+    img.className = `slide__image slide__image--${im.fit}`;
+    img.style.objectPosition =
+      im.position === "top" ? "center top" : im.position === "bottom" ? "center bottom" : "center center";
+    applyImageSize(img, im);
+    if (im.borderWidth > 0) {
+      // Épaisseur relative au plus petit côté de la page : identique en miniature,
+      // dans l'aperçu et en plein écran.
+      img.style.border = `calc(${im.borderWidth} * 0.4cqmin) solid ${im.borderColor}`;
+    }
     img.src = slide.image.url;
     img.alt = "";
     wrap.appendChild(img);

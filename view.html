@@ -35,6 +35,13 @@
       <div class="reader__tap-zone reader__tap-zone--left" id="tap-prev"></div>
       <div class="reader__tap-zone reader__tap-zone--right" id="tap-next"></div>
       <div class="reader__hint" id="reader-hint">Touchez l'écran pour naviguer</div>
+      <div class="reader__owner-bar" id="reader-owner-bar" hidden>
+        <span class="reader__owner-badge" title="Vous êtes le créateur : vos lectures ne sont pas comptées">Créateur · non compté</span>
+        <label class="reader__owner-jump">
+          <span class="sr-only">Aller à la page</span>
+          <select id="reader-owner-select" aria-label="Aller à la page"></select>
+        </label>
+      </div>
     </div>
   </div>
 

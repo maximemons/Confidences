@@ -148,3 +148,61 @@ body {
 .reader__state p {
   color: #a3a0ae;
 }
+
+/* --- Barre du créateur (lecture non comptée + choix de la page) --- */
+
+.reader__owner-bar {
+  position: absolute;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 20px);
+  padding: 6px 6px 6px 12px;
+  border-radius: 999px;
+  background: rgba(10, 10, 14, 0.72);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.reader__owner-badge {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reader__owner-jump select {
+  max-width: 52vw;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.reader__owner-jump option {
+  color: #14141c;
+  background: #fff;
+}
+
+.reader--owner .reader__hint {
+  bottom: 64px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

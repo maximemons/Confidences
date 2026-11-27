@@ -35,7 +35,15 @@ export function emptySlide() {
       boxColor: "#000000",
       boxOpacity: 85
     },
-    image: { url: "", fit: "cover", position: "center" }
+    image: {
+      url: "",
+      fit: "cover",
+      position: "center",
+      scale: 100,
+      borderWidth: 0,
+      borderColor: "#ffffff"
+    },
+    transition: { type: "fade", speed: "normal" }
   };
 }
 
