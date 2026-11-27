@@ -187,12 +187,33 @@
                 <button type="button" data-value="large">Grand</button>
               </div>
             </div>
-            <div class="field" style="margin-bottom:0;">
+            <div class="field">
               <label>Position</label>
               <div class="segmented" id="field-text-align">
                 <button type="button" data-value="top">Haut</button>
                 <button type="button" data-value="center">Centre</button>
                 <button type="button" data-value="bottom">Bas</button>
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Fond du texte</label>
+              <div class="segmented" id="field-box-mode">
+                <button type="button" data-value="none">Aucun</button>
+                <button type="button" data-value="auto">Auto (photo)</button>
+                <button type="button" data-value="color">Couleur</button>
+              </div>
+              <p class="field-hint" id="field-box-hint">
+                Auto : un fond uni apparaît derrière le texte uniquement quand la page a une photo, pour qu'il reste lisible.
+              </p>
+              <div class="box-options" id="field-box-options" hidden>
+                <div class="field box-options__color" id="field-box-color-wrap">
+                  <label for="field-box-color">Couleur</label>
+                  <input id="field-box-color" type="color" value="#000000" />
+                </div>
+                <div class="field box-options__opacity">
+                  <label for="field-box-opacity">Opacité : <span id="field-box-opacity-value">85</span> %</label>
+                  <input id="field-box-opacity" type="range" min="10" max="100" step="5" value="85" />
+                </div>
               </div>
             </div>
           </div>
