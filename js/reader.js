@@ -223,6 +223,9 @@ const portraitScreen = window.matchMedia("(orientation: portrait)");
 let deckIsPaysage = false;
 let rotateDismissed = false;
 let startIndex = 0;
+let rotateAutoHideTimer = null;
+// Le conseil s'efface de lui-même au bout de ce délai.
+const ROTATE_HINT_DURATION_MS = 2000;
 
 function isMismatched() {
   return touchDevice.matches && portraitScreen.matches === deckIsPaysage;
@@ -234,6 +237,10 @@ function updateRotateHint() {
   if (show) {
     elRotate.hidden = false;
     requestAnimationFrame(() => elRotate.classList.add("is-visible"));
+    // Disparition automatique 2 s après l'apparition (une seule fois).
+    if (!rotateAutoHideTimer) {
+      rotateAutoHideTimer = setTimeout(dismissRotateHint, ROTATE_HINT_DURATION_MS);
+    }
   } else if (!elRotate.hidden) {
     elRotate.classList.remove("is-visible");
     setTimeout(() => {
@@ -245,6 +252,7 @@ function updateRotateHint() {
 function dismissRotateHint() {
   if (rotateDismissed) return;
   rotateDismissed = true;
+  clearTimeout(rotateAutoHideTimer);
   updateRotateHint();
 }
 
