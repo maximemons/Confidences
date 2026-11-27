@@ -6,12 +6,14 @@ import {
   watchPresentation,
   renamePresentation,
   saveSlides,
+  setShowTitle,
+  setWrittenAt,
   deletePresentation,
   watchViews,
   emptySlide
 } from "./presentations.js";
 import { compressImageToDataUrl } from "./image-utils.js";
-import { renderSlide, FONT_OPTIONS } from "./slide-render.js";
+import { renderSlide, FONT_OPTIONS, todayISO, timestampToISO } from "./slide-render.js";
 
 const MAX_DOC_BYTES = 900000; // headroom under Firestore's 1 MiB per-document hard limit
 
@@ -30,6 +32,9 @@ const dashboardEmpty = document.getElementById("dashboard-empty");
 const presGrid = document.getElementById("pres-grid");
 
 const editorTitle = document.getElementById("editor-title");
+const fieldShowTitle = document.getElementById("field-show-title");
+const fieldWrittenAtWrap = document.getElementById("field-written-at-wrap");
+const fieldWrittenAt = document.getElementById("field-written-at");
 const shareLink = document.getElementById("share-link");
 const slideStrip = document.getElementById("slide-strip");
 const previewSlide = document.getElementById("preview-slide");
@@ -67,6 +72,8 @@ const state = {
   unsubDoc: null,
   slideIndex: 0
 };
+
+const APP_TITLE = "Confidences";
 
 let toastTimer = null;
 let saveTimer = null;
@@ -271,8 +278,13 @@ async function deleteFromDashboard(pres) {
     danger: true
   });
   if (!ok) return;
-  await deletePresentation(pres.id);
-  toast("Confidence supprimée");
+  try {
+    await deletePresentation(pres.id);
+    toast("Confidence supprimée");
+  } catch (err) {
+    console.error(err);
+    toast("Suppression impossible : " + err.message, 4000);
+  }
 }
 
 async function createNew() {
@@ -313,12 +325,19 @@ async function openEditor(id) {
     id: pres.id,
     ownerId: pres.ownerId,
     title: pres.title || "Sans titre",
+    showTitle: !!pres.showTitle,
+    // Older confidences have no writtenAt: fall back to their creation day.
+    writtenAt: pres.writtenAt || timestampToISO(pres.createdAt) || todayISO(),
     slides: pres.slides && pres.slides.length ? pres.slides : [emptySlide()]
   };
   state.slideIndex = 0;
 
   editorTitle.value = state.current.title;
+  fieldShowTitle.checked = state.current.showTitle;
+  fieldWrittenAt.value = state.current.writtenAt;
+  fieldWrittenAtWrap.hidden = !state.current.showTitle;
   shareLink.value = buildShareLink(id);
+  updateDocumentTitle();
 
   teardownEditorSubs();
   state.unsubViews = watchViews(id, (list) => renderViews(list));
@@ -339,6 +358,7 @@ function backToDashboard() {
   flushSave(true);
   teardownEditorSubs();
   state.current = null;
+  document.title = APP_TITLE;
   showView("dashboard");
 }
 
@@ -369,22 +389,68 @@ document.getElementById("btn-delete-pres").addEventListener("click", async () =>
   });
   if (!ok || !state.current) return;
   clearTimeout(saveTimer);
-  await deletePresentation(state.current.id);
+  const id = state.current.id;
   teardownEditorSubs();
+  try {
+    await deletePresentation(id);
+  } catch (err) {
+    console.error(err);
+    toast("Suppression impossible : " + err.message, 4000);
+    openEditor(id);
+    return;
+  }
   state.current = null;
+  document.title = APP_TITLE;
   showView("dashboard");
   toast("Confidence supprimée");
 });
 
 let titleTimer = null;
 editorTitle.addEventListener("input", () => {
+  if (state.current) {
+    state.current.title = editorTitle.value.trim() || "Sans titre";
+    updateDocumentTitle();
+    if (state.current.showTitle) {
+      renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
+    }
+  }
   clearTimeout(titleTimer);
   titleTimer = setTimeout(() => {
     if (!state.current) return;
     state.current.title = editorTitle.value.trim() || "Sans titre";
     renamePresentation(state.current.id, state.current.title).catch((err) => toast(err.message));
+    if (state.current.showTitle) renderSlideStrip();
   }, 500);
 });
+
+fieldShowTitle.addEventListener("change", () => {
+  if (!state.current) return;
+  state.current.showTitle = fieldShowTitle.checked;
+  fieldWrittenAtWrap.hidden = !state.current.showTitle;
+  setShowTitle(state.current.id, state.current.showTitle).catch((err) => toast(err.message));
+  // Make sure the date is stored for confidences created before this field existed.
+  setWrittenAt(state.current.id, state.current.writtenAt).catch(() => {});
+  renderAll();
+});
+
+fieldWrittenAt.addEventListener("change", () => {
+  if (!state.current) return;
+  // An emptied date field goes back to today.
+  if (!fieldWrittenAt.value) fieldWrittenAt.value = todayISO();
+  state.current.writtenAt = fieldWrittenAt.value;
+  setWrittenAt(state.current.id, state.current.writtenAt).catch((err) => toast(err.message));
+  renderAll();
+});
+
+function updateDocumentTitle() {
+  document.title = state.current ? `${state.current.title} · ${APP_TITLE}` : APP_TITLE;
+}
+
+// Options passed to renderSlide: the title is only drawn on the first slide.
+function slideOptions(index) {
+  if (!state.current || !state.current.showTitle || index !== 0) return {};
+  return { title: state.current.title, date: state.current.writtenAt };
+}
 
 function flushSave(immediate) {
   clearTimeout(saveTimer);
@@ -419,7 +485,7 @@ function renderSlideStrip() {
     inner.style.position = "absolute";
     inner.style.inset = "0";
     thumb.appendChild(inner);
-    renderSlide(inner, slide);
+    renderSlide(inner, slide, slideOptions(i));
     const badge = document.createElement("span");
     badge.className = "slide-thumb__index";
     badge.textContent = i + 1;
@@ -441,7 +507,7 @@ function renderSlideStrip() {
 
 function renderPreviewAndForm() {
   const slide = currentSlide();
-  renderSlide(previewSlide, slide);
+  renderSlide(previewSlide, slide, slideOptions(state.slideIndex));
   slidePosition.textContent = `${state.slideIndex + 1} / ${state.current.slides.length}`;
 
   setSegmentedActive(fieldOrientation, slide.orientation);
@@ -524,7 +590,7 @@ wireSegmented(fieldBgType, (value) => {
 
 fieldBgColor.addEventListener("input", () => {
   currentSlide().background.color = fieldBgColor.value;
-  renderSlide(previewSlide, currentSlide());
+  renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
 });
 fieldBgColor.addEventListener("change", () => flushSave(true));
 
@@ -553,7 +619,7 @@ fieldBgImage.addEventListener("change", async () => {
 let textFlush = null;
 fieldText.addEventListener("input", () => {
   currentSlide().text.content = fieldText.value;
-  renderSlide(previewSlide, currentSlide());
+  renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
   clearTimeout(textFlush);
   textFlush = setTimeout(() => flushSave(true), 600);
 });
@@ -570,7 +636,7 @@ fieldFont.addEventListener("change", () => {
 
 fieldTextColor.addEventListener("input", () => {
   currentSlide().text.color = fieldTextColor.value;
-  renderSlide(previewSlide, currentSlide());
+  renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
 });
 fieldTextColor.addEventListener("change", () => flushSave(true));
 
