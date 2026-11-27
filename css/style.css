@@ -1034,6 +1034,13 @@ input[type="color"] {
     grid-template-columns: minmax(260px, 340px) 1fr;
     align-items: start;
   }
+
+  /* L'aperçu suit le défilement des options (sous l'en-tête collant). */
+  .editor-preview {
+    position: sticky;
+    top: calc(var(--header-h, 72px) + 16px);
+    z-index: 5;
+  }
 }
 
 @media (min-width: 1000px) {

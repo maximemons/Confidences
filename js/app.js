@@ -22,7 +22,9 @@ import {
   normalizeTextBox
 } from "./slide-render.js";
 
-const MAX_DOC_BYTES = 900000; // headroom under Firestore's 1 MiB per-document hard limit
+// Limite technique de Firestore : 1 Mio (1 048 576 octets) par document.
+// On garde ~48 Ko de marge pour les autres champs (titre, e-mail, dates, noms de champs…).
+const MAX_DOC_BYTES = 1000000;
 
 const views = {
   loading: document.getElementById("view-loading"),
@@ -200,6 +202,20 @@ function estimateDocBytes() {
   return new Blob([JSON.stringify(state.current.slides)]).size;
 }
 
+// Place restante (en octets) pour une nouvelle image sur la page courante,
+// en ne comptant pas l'image qu'elle remplacerait. `clearSlot` vide
+// temporairement l'emplacement visé sur une copie de la page.
+function imageBudget(clearSlot) {
+  const slides = state.current.slides.map((s, i) => {
+    if (i !== state.slideIndex) return s;
+    const copy = structuredClone(s);
+    clearSlot(copy);
+    return copy;
+  });
+  const used = new Blob([JSON.stringify(slides)]).size;
+  return MAX_DOC_BYTES - used - 64;
+}
+
 /* ---------------- Auth ---------------- */
 
 watchAuth((user) => {
@@ -373,6 +389,8 @@ async function openEditor(id) {
   renderAll();
   showView("editor");
   // L'aperçu n'a de dimensions qu'une fois l'éditeur affiché.
+  updateHeaderHeight();
+  fitStickyPreview();
   checkTextOverflow();
 }
 
@@ -489,8 +507,47 @@ function applyOrientation(orientation) {
 /** Redessine l'aperçu de la page courante et signale un texte qui déborde. */
 function renderPreview() {
   renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
+  fitStickyPreview();
   checkTextOverflow();
 }
+
+/* ---- Aperçu collant (desktop) ----
+   Sur grand écran, l'aperçu reste visible pendant qu'on fait défiler les options.
+   Si la fenêtre est trop basse pour l'afficher en entier, on le réduit avec `zoom`
+   (texte compris) : les proportions restent identiques, la détection de
+   débordement du texte reste donc fiable. */
+const appHeader = document.querySelector(".app-header");
+const editorPreview = document.querySelector(".editor-preview");
+const slideNavMini = document.querySelector(".slide-nav-mini");
+const desktopQuery = window.matchMedia("(min-width: 720px)");
+
+function updateHeaderHeight() {
+  if (!appHeader) return;
+  document.documentElement.style.setProperty("--header-h", `${appHeader.offsetHeight}px`);
+}
+
+function fitStickyPreview() {
+  if (!editorPreview || !state.current || views.editor.hidden || !desktopQuery.matches) {
+    previewSlide.style.zoom = "";
+    return;
+  }
+  const paysage = previewSlide.classList.contains("slide--paysage");
+  const naturalWidth = Math.min(paysage ? 480 : 320, editorPreview.clientWidth || 320);
+  const naturalHeight = paysage ? (naturalWidth * 9) / 16 : (naturalWidth * 16) / 9;
+  const headerH = appHeader ? appHeader.offsetHeight : 72;
+  const navH = slideNavMini ? slideNavMini.offsetHeight : 40;
+  const available = window.innerHeight - headerH - 16 - 16 - 14 - navH;
+  const zoom = Math.max(0.5, Math.min(1, available / naturalHeight));
+  previewSlide.style.zoom = zoom < 0.999 ? zoom.toFixed(3) : "";
+}
+
+updateHeaderHeight();
+if (appHeader && "ResizeObserver" in window) {
+  new ResizeObserver(updateHeaderHeight).observe(appHeader);
+}
+desktopQuery.addEventListener?.("change", () => {
+  if (state.current && !views.editor.hidden) renderPreview();
+});
 
 function checkTextOverflow() {
   const wrap = previewSlide.querySelector(".slide__text-wrap");
@@ -677,12 +734,12 @@ fieldBgImage.addEventListener("change", async () => {
   const previousUrl = currentSlide().background.imageUrl;
   try {
     toast("Compression de l'image…", 1500);
-    const dataUrl = await compressImageToDataUrl(file);
+    const dataUrl = await compressImageToDataUrl(file, imageBudget((s) => (s.background.imageUrl = "")));
     currentSlide().background.imageUrl = dataUrl;
     currentSlide().background.type = "image";
     if (estimateDocBytes() > MAX_DOC_BYTES) {
       currentSlide().background.imageUrl = previousUrl;
-      toast("Cette confidence serait trop volumineuse avec cette image. Essayez une image plus simple.", 4000);
+      toast("Cette confidence serait trop volumineuse avec cette image. Retirez ou remplacez une autre image.", 4000);
     } else {
       flushSave(true);
     }
@@ -851,7 +908,10 @@ fieldText.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("resize", () => {
-  if (state.current && !views.editor.hidden) checkTextOverflow();
+  if (state.current && !views.editor.hidden) {
+    fitStickyPreview();
+    checkTextOverflow();
+  }
 });
 
 // Les polices web peuvent changer la hauteur du texte une fois chargées.
@@ -918,11 +978,11 @@ fieldImage.addEventListener("change", async () => {
   const previousUrl = currentSlide().image.url;
   try {
     toast("Compression de l'image…", 1500);
-    const dataUrl = await compressImageToDataUrl(file);
+    const dataUrl = await compressImageToDataUrl(file, imageBudget((s) => (s.image.url = "")));
     currentSlide().image.url = dataUrl;
     if (estimateDocBytes() > MAX_DOC_BYTES) {
       currentSlide().image.url = previousUrl;
-      toast("Cette confidence serait trop volumineuse avec cette image. Essayez une image plus simple.", 4000);
+      toast("Cette confidence serait trop volumineuse avec cette image. Retirez ou remplacez une autre image.", 4000);
     } else {
       flushSave(true);
     }
