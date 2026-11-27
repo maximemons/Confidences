@@ -13,7 +13,7 @@ import {
   emptySlide
 } from "./presentations.js";
 import { compressImageToDataUrl } from "./image-utils.js";
-import { renderSlide, FONT_OPTIONS, todayISO, timestampToISO } from "./slide-render.js";
+import { renderSlide, FONT_OPTIONS, todayISO, timestampToISO, deckOrientation } from "./slide-render.js";
 
 const MAX_DOC_BYTES = 900000; // headroom under Firestore's 1 MiB per-document hard limit
 
@@ -50,6 +50,9 @@ const fieldBgColor = document.getElementById("field-bg-color");
 const fieldBgImage = document.getElementById("field-bg-image");
 const fieldBgImagePreview = document.getElementById("field-bg-image-preview");
 const fieldText = document.getElementById("field-text");
+const fieldTextCount = document.getElementById("field-text-count");
+const fieldTextOverflow = document.getElementById("field-text-overflow");
+const mdToolbar = document.getElementById("md-toolbar");
 const fieldFont = document.getElementById("field-font");
 const fieldTextColor = document.getElementById("field-text-color");
 const fieldTextSize = document.getElementById("field-text-size");
@@ -331,6 +334,9 @@ async function openEditor(id) {
     slides: pres.slides && pres.slides.length ? pres.slides : [emptySlide()]
   };
   state.slideIndex = 0;
+  // Les anciennes confidences pouvaient mélanger les orientations :
+  // on aligne toutes les pages sur la première.
+  if (applyOrientation(deckOrientation(state.current.slides))) flushSave(true);
 
   editorTitle.value = state.current.title;
   fieldShowTitle.checked = state.current.showTitle;
@@ -352,6 +358,8 @@ async function openEditor(id) {
 
   renderAll();
   showView("editor");
+  // L'aperçu n'a de dimensions qu'une fois l'éditeur affiché.
+  checkTextOverflow();
 }
 
 function backToDashboard() {
@@ -411,7 +419,7 @@ editorTitle.addEventListener("input", () => {
     state.current.title = editorTitle.value.trim() || "Sans titre";
     updateDocumentTitle();
     if (state.current.showTitle) {
-      renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
+      renderPreview();
     }
   }
   clearTimeout(titleTimer);
@@ -450,6 +458,40 @@ function updateDocumentTitle() {
 function slideOptions(index) {
   if (!state.current || !state.current.showTitle || index !== 0) return {};
   return { title: state.current.title, date: state.current.writtenAt };
+}
+
+/** Applique une orientation à toutes les pages. Renvoie true si une page a changé. */
+function applyOrientation(orientation) {
+  let changed = false;
+  state.current.slides.forEach((slide) => {
+    if (slide.orientation !== orientation) {
+      slide.orientation = orientation;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+/** Redessine l'aperçu de la page courante et signale un texte qui déborde. */
+function renderPreview() {
+  renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
+  checkTextOverflow();
+}
+
+function checkTextOverflow() {
+  const wrap = previewSlide.querySelector(".slide__text-wrap");
+  let overflow = false;
+  if (wrap && wrap.firstElementChild) {
+    const box = previewSlide.getBoundingClientRect();
+    const first = wrap.firstElementChild.getBoundingClientRect();
+    const last = wrap.lastElementChild.getBoundingClientRect();
+    overflow = box.height > 0 && (first.top < box.top - 1 || last.bottom > box.bottom + 1);
+  }
+  fieldTextOverflow.hidden = !overflow;
+}
+
+function updateTextCount() {
+  fieldTextCount.textContent = `${fieldText.value.length} / ${fieldText.maxLength}`;
 }
 
 function flushSave(immediate) {
@@ -507,10 +549,10 @@ function renderSlideStrip() {
 
 function renderPreviewAndForm() {
   const slide = currentSlide();
-  renderSlide(previewSlide, slide, slideOptions(state.slideIndex));
+  renderPreview();
   slidePosition.textContent = `${state.slideIndex + 1} / ${state.current.slides.length}`;
 
-  setSegmentedActive(fieldOrientation, slide.orientation);
+  setSegmentedActive(fieldOrientation, deckOrientation(state.current.slides));
   setSegmentedActive(fieldBgType, slide.background.type);
   setSegmentedActive(fieldTextSize, slide.text.size);
   setSegmentedActive(fieldTextAlign, slide.text.align);
@@ -526,6 +568,7 @@ function renderPreviewAndForm() {
   if (document.activeElement !== fieldText) {
     fieldText.value = slide.text.content || "";
   }
+  updateTextCount();
   fieldFont.value = slide.text.font || "Inter";
   fieldTextColor.value = slide.text.color || "#f5f0e8";
 
@@ -535,7 +578,9 @@ function renderPreviewAndForm() {
 }
 
 function addSlide() {
-  state.current.slides.push(emptySlide());
+  const slide = emptySlide();
+  slide.orientation = deckOrientation(state.current.slides);
+  state.current.slides.push(slide);
   state.slideIndex = state.current.slides.length - 1;
   flushSave(true);
   renderAll();
@@ -575,7 +620,7 @@ document.getElementById("btn-slide-up").addEventListener("click", () => moveSlid
 document.getElementById("btn-slide-down").addEventListener("click", () => moveSlide(1));
 
 wireSegmented(fieldOrientation, (value) => {
-  currentSlide().orientation = value;
+  applyOrientation(value);
   flushSave(true);
   renderAll();
 });
@@ -590,7 +635,7 @@ wireSegmented(fieldBgType, (value) => {
 
 fieldBgColor.addEventListener("input", () => {
   currentSlide().background.color = fieldBgColor.value;
-  renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
+  renderPreview();
 });
 fieldBgColor.addEventListener("change", () => flushSave(true));
 
@@ -619,13 +664,167 @@ fieldBgImage.addEventListener("change", async () => {
 let textFlush = null;
 fieldText.addEventListener("input", () => {
   currentSlide().text.content = fieldText.value;
-  renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
+  updateTextCount();
+  renderPreview();
   clearTimeout(textFlush);
   textFlush = setTimeout(() => flushSave(true), 600);
 });
 fieldText.addEventListener("blur", () => {
   flushSave(true);
   renderSlideStrip();
+});
+
+/* ---------------- Barre d'outils Markdown ---------------- */
+
+/**
+ * Remplace la sélection du textarea. execCommand conserve l'historique
+ * d'annulation (Ctrl+Z) ; à défaut on utilise setRangeText.
+ * Dans tous les cas un événement "input" met à jour l'aperçu en direct.
+ */
+function replaceSelection(text, selectFrom, selectTo) {
+  fieldText.focus();
+  const start = fieldText.selectionStart;
+  const max = fieldText.maxLength > 0 ? fieldText.maxLength : Infinity;
+  const removed = fieldText.selectionEnd - start;
+  if (fieldText.value.length - removed + text.length > max) {
+    toast("Le texte atteint la longueur maximale.");
+    return;
+  }
+  let done = false;
+  try {
+    done = document.execCommand("insertText", false, text);
+  } catch {
+    done = false;
+  }
+  if (!done || fieldText.value.slice(start, start + text.length) !== text) {
+    fieldText.setRangeText(text, start, fieldText.selectionEnd, "end");
+    fieldText.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  if (selectFrom !== undefined) {
+    fieldText.setSelectionRange(start + selectFrom, start + (selectTo ?? selectFrom));
+  }
+}
+
+/** Entoure la sélection (ou retire l'entourage s'il est déjà présent). */
+function wrapSelection(marker, placeholder) {
+  const { selectionStart: start, selectionEnd: end, value } = fieldText;
+  const selected = value.slice(start, end);
+  const len = marker.length;
+  if (value.slice(start - len, start) === marker && value.slice(end, end + len) === marker) {
+    fieldText.setSelectionRange(start - len, end + len);
+    replaceSelection(selected, 0, selected.length);
+    return;
+  }
+  const inner = selected || placeholder;
+  replaceSelection(`${marker}${inner}${marker}`, len, len + inner.length);
+}
+
+/** Ajoute (ou retire) un préfixe à chaque ligne sélectionnée. */
+function prefixLines(makePrefix, matcher) {
+  const { value } = fieldText;
+  const start = value.lastIndexOf("\n", fieldText.selectionStart - 1) + 1;
+  let end = value.indexOf("\n", fieldText.selectionEnd);
+  if (end === -1 || (fieldText.selectionEnd > fieldText.selectionStart && value[fieldText.selectionEnd - 1] === "\n")) {
+    end = end === -1 ? value.length : fieldText.selectionEnd - 1;
+  }
+  const lines = value.slice(start, end).split("\n");
+  const allPrefixed = lines.every((l) => !l.trim() || matcher.test(l));
+  const result = lines
+    .map((l, i) => {
+      if (allPrefixed) return l.replace(matcher, "");
+      return l.trim() ? makePrefix(i) + l.replace(matcher, "") : l;
+    })
+    .join("\n");
+  fieldText.setSelectionRange(start, end);
+  replaceSelection(result, 0, result.length);
+}
+
+function insertLink() {
+  const { selectionStart: start, selectionEnd: end, value } = fieldText;
+  const selected = value.slice(start, end).trim();
+  if (/^(https?:\/\/|mailto:)/i.test(selected)) {
+    const text = `[texte](${selected})`;
+    replaceSelection(text, 1, 6);
+  } else {
+    const label = selected || "texte";
+    const text = `[${label}](https://)`;
+    replaceSelection(text, label.length + 3, label.length + 11);
+  }
+}
+
+function insertBlock(block) {
+  const { selectionStart: start, value } = fieldText;
+  const before = value.slice(0, start);
+  const lead = !before ? "" : before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
+  const text = `${lead}${block}\n\n`;
+  fieldText.setSelectionRange(start, fieldText.selectionEnd);
+  replaceSelection(text, text.length);
+}
+
+const MD_ACTIONS = {
+  bold: () => wrapSelection("**", "texte en gras"),
+  italic: () => wrapSelection("*", "texte en italique"),
+  strike: () => wrapSelection("~~", "texte barré"),
+  mark: () => wrapSelection("==", "texte surligné"),
+  heading: () => prefixLines(() => "## ", /^#{1,6}\s+/),
+  ul: () => prefixLines(() => "- ", /^\s*[-*+]\s+/),
+  ol: () => prefixLines((i) => `${i + 1}. `, /^\s*\d{1,9}[.)]\s+/),
+  quote: () => prefixLines(() => "> ", /^\s*>\s?/),
+  link: insertLink,
+  hr: () => insertBlock("---")
+};
+
+// mousedown + preventDefault : le textarea garde le focus et sa sélection.
+mdToolbar.addEventListener("mousedown", (e) => {
+  if (e.target.closest("button")) e.preventDefault();
+});
+mdToolbar.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-md]");
+  if (!btn || !state.current) return;
+  MD_ACTIONS[btn.dataset.md]?.();
+});
+
+fieldText.addEventListener("keydown", (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && !e.shiftKey && !e.altKey) {
+    const action = { b: "bold", i: "italic", k: "link" }[e.key.toLowerCase()];
+    if (action) {
+      e.preventDefault();
+      MD_ACTIONS[action]();
+      return;
+    }
+  }
+
+  // Entrée dans une liste : continue la liste, ou la termine sur un élément vide.
+  if (e.key === "Enter" && !mod && !e.shiftKey && !e.isComposing && fieldText.selectionStart === fieldText.selectionEnd) {
+    const { selectionStart: pos, value } = fieldText;
+    const lineStart = value.lastIndexOf("\n", pos - 1) + 1;
+    const line = value.slice(lineStart, pos);
+    const m = /^(\s*)([-*+]|\d{1,9}[.)]|>)(\s+)(.*)$/.exec(line);
+    if (!m) return;
+    e.preventDefault();
+    if (!m[4].trim()) {
+      // Élément vide : on sort de la liste en laissant une ligne vide,
+      // sinon le paragraphe suivant serait rattaché au dernier élément.
+      fieldText.setSelectionRange(lineStart, pos);
+      replaceSelection("\n", 1);
+      return;
+    }
+    let marker = m[2];
+    const num = /^(\d+)([.)])$/.exec(marker);
+    if (num) marker = `${Number(num[1]) + 1}${num[2]}`;
+    const insert = `\n${m[1]}${marker}${m[3]}`;
+    replaceSelection(insert, insert.length);
+  }
+});
+
+window.addEventListener("resize", () => {
+  if (state.current && !views.editor.hidden) checkTextOverflow();
+});
+
+// Les polices web peuvent changer la hauteur du texte une fois chargées.
+document.fonts?.ready.then(() => {
+  if (state.current) checkTextOverflow();
 });
 
 fieldFont.addEventListener("change", () => {
@@ -636,7 +835,7 @@ fieldFont.addEventListener("change", () => {
 
 fieldTextColor.addEventListener("input", () => {
   currentSlide().text.color = fieldTextColor.value;
-  renderSlide(previewSlide, currentSlide(), slideOptions(state.slideIndex));
+  renderPreview();
 });
 fieldTextColor.addEventListener("change", () => flushSave(true));
 
