@@ -49,13 +49,23 @@
     <section id="view-dashboard" hidden>
       <div class="dashboard-top">
         <h2>Mes confidences</h2>
-        <button id="btn-new" class="btn btn--primary" type="button">+ Nouvelle confidence</button>
+        <div class="dashboard-top__actions">
+          <button id="btn-categories" class="btn btn--icon btn--categories" type="button" title="Gérer les catégories" aria-label="Gérer les catégories">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2.5 2.5 7.5 12 12.5l9.5-5z" />
+              <path d="m2.5 12 9.5 5 9.5-5" />
+              <path d="m2.5 16.5 9.5 5 9.5-5" />
+            </svg>
+          </button>
+          <button id="btn-new" class="btn btn--primary" type="button">+ Nouvelle confidence</button>
+        </div>
       </div>
+      <p class="dashboard-hint" id="dashboard-hint" hidden>Glissez une confidence vers une autre ligne pour changer sa catégorie (sur mobile : appui long puis glisser).</p>
       <div id="dashboard-empty" class="empty-state" hidden>
         <p>Vous n'avez pas encore créé de confidence.</p>
         <button id="btn-new-empty" class="btn btn--primary" type="button">Créer la première</button>
       </div>
-      <div id="pres-grid" class="pres-grid"></div>
+      <div id="pres-rows" class="cat-rows"></div>
     </section>
 
     <section id="view-editor" hidden>
@@ -86,6 +96,21 @@
         </div>
 
         <div>
+          <div class="form-card" style="margin-bottom:16px;">
+            <h3>Catégorie</h3>
+            <div class="category-field">
+              <select id="field-category" aria-label="Catégorie de la confidence"></select>
+              <button id="btn-editor-categories" class="btn btn--icon btn--sm btn--categories" type="button" title="Gérer les catégories" aria-label="Gérer les catégories">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2.5 2.5 7.5 12 12.5l9.5-5z" />
+                  <path d="m2.5 12 9.5 5 9.5-5" />
+                  <path d="m2.5 16.5 9.5 5 9.5-5" />
+                </svg>
+              </button>
+            </div>
+            <p class="field-hint">Pour retrouver vos confidences par personne, par thème… Seul vous voyez les catégories.</p>
+          </div>
+
           <div class="form-card" style="margin-bottom:16px;">
             <h3>Titre</h3>
             <label class="check-field" for="field-show-title">

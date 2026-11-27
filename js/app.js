@@ -34,6 +34,15 @@ import {
 import { playTransition, finishTransitions } from "./transitions.js";
 import { enableSlideReorder } from "./slide-reorder.js";
 import { enhanceColorInput, setRecentColorsOwner } from "./color-field.js";
+import {
+  watchCategories,
+  saveCategories,
+  setPresentationCategory,
+  deleteCategory,
+  MAX_CATEGORIES,
+  MAX_CATEGORY_NAME
+} from "./categories.js";
+import { enableCategoryDrag } from "./category-dnd.js";
 
 // Limite technique de Firestore : 1 Mio (1 048 576 octets) par document.
 // On garde ~48 Ko de marge pour les autres champs (titre, e-mail, dates, noms de champs…).
@@ -51,7 +60,9 @@ const headerUserPhoto = document.getElementById("header-user-photo");
 const headerUserName = document.getElementById("header-user-name");
 
 const dashboardEmpty = document.getElementById("dashboard-empty");
-const presGrid = document.getElementById("pres-grid");
+const presRows = document.getElementById("pres-rows");
+const dashboardHint = document.getElementById("dashboard-hint");
+const fieldCategory = document.getElementById("field-category");
 
 const editorTitle = document.getElementById("editor-title");
 const fieldShowTitle = document.getElementById("field-show-title");
@@ -115,6 +126,8 @@ const state = {
   user: null,
   presentations: [],
   unsubPresentations: null,
+  categories: [],
+  unsubCategories: null,
   current: null,
   unsubViews: null,
   unsubDoc: null,
@@ -266,6 +279,11 @@ watchAuth((user) => {
       state.unsubPresentations();
       state.unsubPresentations = null;
     }
+    if (state.unsubCategories) {
+      state.unsubCategories();
+      state.unsubCategories = null;
+    }
+    state.categories = [];
     headerUser.hidden = true;
     showView("login");
     return;
@@ -290,6 +308,7 @@ document.getElementById("btn-logout").addEventListener("click", () => {
 /* ---------------- Dashboard ---------------- */
 
 function subscribeDashboard() {
+  subscribeCategories();
   if (state.unsubPresentations) state.unsubPresentations();
   state.unsubPresentations = watchMyPresentations(state.user.uid, (list) => {
     state.presentations = list;
@@ -297,39 +316,406 @@ function subscribeDashboard() {
   });
 }
 
+const STACK_ICON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 2.5 7.5 12 12.5l9.5-5z"/><path d="m2.5 12 9.5 5 9.5-5"/><path d="m2.5 16.5 9.5 5 9.5-5"/></svg>';
+
+/** Catégorie connue d'une confidence (une catégorie supprimée = sans catégorie). */
+function categoryOf(pres) {
+  return state.categories.some((c) => c.id === pres.categoryId) ? pres.categoryId : null;
+}
+
+function buildPresCard(pres) {
+  const card = document.createElement("div");
+  card.className = "pres-card";
+  card.dataset.id = pres.id;
+  const pages = (pres.slides || []).length;
+  const viewsN = pres.viewCount || 0;
+  card.innerHTML = `
+    <div class="pres-card__head">
+      <div class="pres-card__title">${escapeHtml(pres.title || "Sans titre")}</div>
+    </div>
+    <div class="pres-card__meta">
+      <span>${pages} page${pages > 1 ? "s" : ""}</span>
+      <span>${viewsN} vue${viewsN > 1 ? "s" : ""}</span>
+      <span>Modifié le ${formatDate(pres.updatedAt)}</span>
+    </div>
+    <div class="pres-card__actions">
+      <button class="btn btn--sm" data-action="edit">Ouvrir</button>
+      <button class="btn btn--ghost btn--sm" data-action="preview">▶ Aperçu</button>
+      <button class="btn btn--ghost btn--sm" data-action="copy">⧉ Lien</button>
+      <button class="btn btn--ghost btn--sm" data-action="qr">▦ QR</button>
+      <button class="btn btn--danger btn--sm" data-action="delete">Supprimer</button>
+    </div>`;
+  card.querySelector('[data-action="edit"]').addEventListener("click", () => openEditor(pres.id));
+  card.querySelector('[data-action="preview"]').addEventListener("click", () => {
+    window.open(buildPreviewLink(pres.id), "_blank");
+  });
+  card.querySelector('[data-action="copy"]').addEventListener("click", () => copyLink(pres.id));
+  card.querySelector('[data-action="qr"]').addEventListener("click", () => showQrModal(buildShareLink(pres.id), pres.title));
+  card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteFromDashboard(pres));
+  return card;
+}
+
+/**
+ * Tableau de bord : une ligne par catégorie (dans l'ordre choisi), puis
+ * « Sans catégorie ». Sans aucune catégorie, on garde la grille simple.
+ */
 function renderDashboard() {
   const list = state.presentations;
-  dashboardEmpty.hidden = list.length > 0;
-  presGrid.innerHTML = "";
+  const categories = state.categories;
+  dashboardEmpty.hidden = list.length > 0 || categories.length > 0;
+  dashboardHint.hidden = !(categories.length && list.length);
+  presRows.innerHTML = "";
+  presRows.classList.toggle("cat-rows--flat", categories.length === 0);
+
+  const groups = new Map(categories.map((c) => [c.id, []]));
+  const loose = [];
   list.forEach((pres) => {
-    const card = document.createElement("div");
-    card.className = "pres-card";
-    card.innerHTML = `
-      <div class="pres-card__head">
-        <div class="pres-card__title">${escapeHtml(pres.title || "Sans titre")}</div>
-      </div>
-      <div class="pres-card__meta">
-        <span>${(pres.slides || []).length} page${(pres.slides || []).length > 1 ? "s" : ""}</span>
-        <span>${pres.viewCount || 0} vue${(pres.viewCount || 0) > 1 ? "s" : ""}</span>
-        <span>Modifié le ${formatDate(pres.updatedAt)}</span>
-      </div>
-      <div class="pres-card__actions">
-        <button class="btn btn--sm" data-action="edit">Ouvrir</button>
-        <button class="btn btn--ghost btn--sm" data-action="preview">▶ Aperçu</button>
-        <button class="btn btn--ghost btn--sm" data-action="copy">⧉ Lien</button>
-        <button class="btn btn--ghost btn--sm" data-action="qr">▦ QR</button>
-        <button class="btn btn--danger btn--sm" data-action="delete">Supprimer</button>
-      </div>`;
-    card.querySelector('[data-action="edit"]').addEventListener("click", () => openEditor(pres.id));
-    card.querySelector('[data-action="preview"]').addEventListener("click", () => {
-      window.open(buildPreviewLink(pres.id), "_blank");
-    });
-    card.querySelector('[data-action="copy"]').addEventListener("click", () => copyLink(pres.id));
-    card.querySelector('[data-action="qr"]').addEventListener("click", () => showQrModal(buildShareLink(pres.id), pres.title));
-    card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteFromDashboard(pres));
-    presGrid.appendChild(card);
+    const id = categoryOf(pres);
+    (id ? groups.get(id) : loose).push(pres);
+  });
+
+  const addRow = (category, items) => {
+    const row = document.createElement("section");
+    row.className = "cat-row";
+    row.dataset.categoryId = category ? category.id : "";
+    if (categories.length) {
+      const head = document.createElement("div");
+      head.className = "cat-row__head";
+      head.innerHTML = `
+        <h3 class="cat-row__title">${category ? escapeHtml(category.name) : "Sans catégorie"}</h3>
+        <span class="cat-row__count">${items.length}</span>
+        <button class="btn btn--ghost btn--sm cat-row__new" type="button" title="Nouvelle confidence dans cette ligne">+ Nouvelle</button>`;
+      head.querySelector(".cat-row__new").addEventListener("click", () => createNew(category?.id || null));
+      row.appendChild(head);
+    }
+    const cards = document.createElement("div");
+    cards.className = "cat-row__cards";
+    items.forEach((pres) => cards.appendChild(buildPresCard(pres)));
+    if (!items.length) {
+      const empty = document.createElement("div");
+      empty.className = "cat-row__empty";
+      empty.textContent = category
+        ? "Glissez une confidence ici, ou créez-en une avec « + Nouvelle »."
+        : "Glissez ici une confidence pour la sortir de sa catégorie.";
+      cards.appendChild(empty);
+    }
+    row.appendChild(cards);
+    presRows.appendChild(row);
+  };
+
+  categories.forEach((c) => addRow(c, groups.get(c.id)));
+  if (!categories.length) {
+    if (loose.length) addRow(null, loose);
+  } else {
+    addRow(null, loose);
+  }
+}
+
+enableCategoryDrag(presRows, {
+  onDrop: (presentationId, categoryId) => movePresentation(presentationId, categoryId)
+});
+
+async function movePresentation(presentationId, categoryId) {
+  const pres = state.presentations.find((p) => p.id === presentationId);
+  if (!pres || (categoryOf(pres) || null) === (categoryId || null)) return;
+  const previous = pres.categoryId ?? null;
+  // Affichage immédiat ; Firestore confirme ensuite (ou on annule).
+  pres.categoryId = categoryId;
+  renderDashboard();
+  try {
+    await setPresentationCategory(presentationId, categoryId);
+    const name = state.categories.find((c) => c.id === categoryId)?.name;
+    toast(name ? `Rangée dans « ${name} »` : "Retirée de sa catégorie");
+  } catch (err) {
+    pres.categoryId = previous;
+    renderDashboard();
+    toast("Déplacement impossible : " + err.message, 4000);
+  }
+}
+
+/* ---------------- Catégories ---------------- */
+
+function subscribeCategories() {
+  if (state.unsubCategories) state.unsubCategories();
+  state.unsubCategories = watchCategories(state.user.uid, (categories) => {
+    state.categories = categories;
+    renderDashboard();
+    renderCategorySelect();
+    if (categoriesModalOpen) renderCategoriesModal();
   });
 }
+
+function normalizeCategoryName(name) {
+  return String(name || "").replace(/\s+/g, " ").trim().slice(0, MAX_CATEGORY_NAME);
+}
+
+/** Crée une catégorie ; renvoie son id, ou null (avec un message) si impossible. */
+async function createCategory(rawName) {
+  const name = normalizeCategoryName(rawName);
+  if (!name) {
+    toast("Donnez un nom à la catégorie.");
+    return null;
+  }
+  if (state.categories.length >= MAX_CATEGORIES) {
+    toast(`${MAX_CATEGORIES} catégories au maximum.`);
+    return null;
+  }
+  if (state.categories.some((c) => c.name.toLocaleLowerCase("fr") === name.toLocaleLowerCase("fr"))) {
+    toast(`La catégorie « ${name} » existe déjà.`);
+    return null;
+  }
+  const category = { id: crypto.randomUUID(), name };
+  const next = [...state.categories, category];
+  state.categories = next;
+  renderDashboard();
+  renderCategorySelect();
+  try {
+    await saveCategories(state.user.uid, next);
+    return category.id;
+  } catch (err) {
+    toast("Création impossible : " + err.message, 4000);
+    return null;
+  }
+}
+
+async function renameCategory(id, rawName) {
+  const name = normalizeCategoryName(rawName);
+  const current = state.categories.find((c) => c.id === id);
+  if (!current || !name || name === current.name) return false;
+  if (state.categories.some((c) => c.id !== id && c.name.toLocaleLowerCase("fr") === name.toLocaleLowerCase("fr"))) {
+    toast(`La catégorie « ${name} » existe déjà.`);
+    return false;
+  }
+  const next = state.categories.map((c) => (c.id === id ? { ...c, name } : c));
+  state.categories = next;
+  renderDashboard();
+  renderCategorySelect();
+  await saveCategories(state.user.uid, next).catch((err) => toast(err.message, 4000));
+  return true;
+}
+
+async function removeCategory(category) {
+  const members = state.presentations.filter((p) => categoryOf(p) === category.id);
+  if (members.length) {
+    const ok = await confirmModal({
+      title: `Supprimer « ${escapeHtml(category.name)} » ?`,
+      message: `${members.length} confidence${members.length > 1 ? "s repasseront" : " repassera"} dans « Sans catégorie ». Aucune confidence n'est supprimée.`,
+      confirmLabel: "Supprimer la catégorie",
+      danger: true
+    });
+    if (!ok) {
+      openCategoriesModal();
+      return;
+    }
+  }
+  try {
+    await deleteCategory(
+      state.user.uid,
+      state.categories,
+      category.id,
+      members.map((p) => p.id)
+    );
+    members.forEach((p) => (p.categoryId = null));
+    state.categories = state.categories.filter((c) => c.id !== category.id);
+    renderDashboard();
+    renderCategorySelect();
+    toast(`Catégorie « ${category.name} » supprimée`);
+  } catch (err) {
+    toast("Suppression impossible : " + err.message, 4000);
+  }
+  if (members.length) openCategoriesModal();
+}
+
+let categoriesModalOpen = false;
+
+function closeCategoriesModal() {
+  categoriesModalOpen = false;
+  modalRoot.innerHTML = "";
+  document.removeEventListener("keydown", onCategoriesKey);
+}
+
+function onCategoriesKey(e) {
+  if (e.key === "Escape" && categoriesModalOpen) closeCategoriesModal();
+}
+
+function openCategoriesModal() {
+  categoriesModalOpen = true;
+  document.addEventListener("keydown", onCategoriesKey);
+  renderCategoriesModal(true);
+}
+
+/** Fenêtre de gestion : créer, renommer, supprimer les catégories. */
+function renderCategoriesModal(focusInput = false) {
+  // Ne pas écraser une saisie en cours dans la fenêtre.
+  const active = document.activeElement;
+  if (!focusInput && active && modalRoot.contains(active) && active.matches("input")) return;
+
+  const counts = new Map();
+  state.presentations.forEach((p) => {
+    const id = categoryOf(p);
+    if (id) counts.set(id, (counts.get(id) || 0) + 1);
+  });
+  const items = state.categories
+    .map(
+      (c) => `
+      <li class="cat-manage__item" data-id="${c.id}">
+        <input class="cat-manage__name" type="text" maxlength="${MAX_CATEGORY_NAME}" value="${escapeHtml(c.name)}" aria-label="Nom de la catégorie" />
+        <span class="cat-manage__count">${counts.get(c.id) || 0}</span>
+        <button class="btn btn--ghost btn--icon btn--sm cat-manage__delete" type="button" title="Supprimer la catégorie" aria-label="Supprimer ${escapeHtml(c.name)}">🗑</button>
+      </li>`
+    )
+    .join("");
+
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" data-close>
+      <div class="modal modal--categories" role="dialog" aria-label="Catégories">
+        <div class="cat-manage__head">
+          <span class="cat-manage__icon">${STACK_ICON}</span>
+          <h3 class="modal__title" style="margin:0;">Catégories</h3>
+        </div>
+        <p class="field-hint" style="margin-top:4px;">Rangez vos confidences par personne, par thème… Cliquez sur un nom pour le modifier.</p>
+        <form class="cat-manage__new" id="cat-new-form">
+          <input id="cat-new-name" type="text" maxlength="${MAX_CATEGORY_NAME}" placeholder="Nouvelle catégorie (ex. Maman, Anniversaires…)" autocomplete="off" />
+          <button class="btn btn--primary btn--sm" type="submit">Créer</button>
+        </form>
+        ${
+          state.categories.length
+            ? `<ul class="cat-manage__list">${items}</ul>`
+            : `<p class="cat-manage__empty">Aucune catégorie pour le moment.</p>`
+        }
+        <div class="modal__actions">
+          <button class="btn btn--ghost btn--sm" id="cat-close" type="button">Fermer</button>
+        </div>
+      </div>
+    </div>`;
+
+  const input = modalRoot.querySelector("#cat-new-name");
+  modalRoot.querySelector("#cat-new-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const value = input.value;
+    const id = await createCategory(value);
+    if (id && categoriesModalOpen) {
+      renderCategoriesModal(true);
+    }
+  });
+  modalRoot.querySelector("#cat-close").addEventListener("click", closeCategoriesModal);
+  modalRoot.querySelector(".modal-backdrop").addEventListener("click", (e) => {
+    if (e.target.hasAttribute("data-close")) closeCategoriesModal();
+  });
+  modalRoot.querySelectorAll(".cat-manage__item").forEach((li) => {
+    const id = li.dataset.id;
+    const nameInput = li.querySelector(".cat-manage__name");
+    const commit = async () => {
+      const ok = await renameCategory(id, nameInput.value);
+      if (!ok) nameInput.value = state.categories.find((c) => c.id === id)?.name || "";
+    };
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        nameInput.blur();
+      } else if (e.key === "Escape") {
+        e.stopPropagation();
+        nameInput.value = state.categories.find((c) => c.id === id)?.name || "";
+        nameInput.blur();
+      }
+    });
+    nameInput.addEventListener("blur", commit);
+    li.querySelector(".cat-manage__delete").addEventListener("click", () => {
+      const category = state.categories.find((c) => c.id === id);
+      if (!category) return;
+      const empty = !state.presentations.some((p) => categoryOf(p) === id);
+      if (!empty) categoriesModalOpen = false;
+      removeCategory(category);
+    });
+  });
+  if (focusInput) setTimeout(() => input.focus(), 30);
+}
+
+document.getElementById("btn-categories").addEventListener("click", openCategoriesModal);
+document.getElementById("btn-editor-categories").addEventListener("click", openCategoriesModal);
+
+/* ---- Catégorie de la confidence ouverte (éditeur) ---- */
+
+const NEW_CATEGORY_VALUE = "__new__";
+
+function renderCategorySelect() {
+  if (!fieldCategory) return;
+  const current = state.current
+    ? state.categories.some((c) => c.id === state.current.categoryId)
+      ? state.current.categoryId
+      : ""
+    : "";
+  fieldCategory.innerHTML = "";
+  const add = (value, label) => {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = label;
+    fieldCategory.appendChild(opt);
+  };
+  add("", "Sans catégorie");
+  state.categories.forEach((c) => add(c.id, c.name));
+  add(NEW_CATEGORY_VALUE, "+ Nouvelle catégorie…");
+  fieldCategory.value = current;
+}
+
+/** Petite fenêtre pour nommer une nouvelle catégorie depuis l'éditeur. */
+function promptCategoryName() {
+  return new Promise((resolve) => {
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop">
+        <div class="modal" role="dialog" aria-label="Nouvelle catégorie">
+          <h3 class="modal__title">Nouvelle catégorie</h3>
+          <form id="cat-prompt-form">
+            <input id="cat-prompt-name" type="text" maxlength="${MAX_CATEGORY_NAME}" placeholder="Ex. Maman, Anniversaires…" autocomplete="off" />
+            <div class="modal__actions">
+              <button class="btn btn--ghost btn--sm" id="cat-prompt-cancel" type="button">Annuler</button>
+              <button class="btn btn--primary btn--sm" type="submit">Créer et ranger</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+    const input = modalRoot.querySelector("#cat-prompt-name");
+    const close = (value) => {
+      modalRoot.innerHTML = "";
+      resolve(value);
+    };
+    modalRoot.querySelector("#cat-prompt-cancel").addEventListener("click", () => close(null));
+    modalRoot.querySelector("#cat-prompt-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      close(input.value);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close(null);
+    });
+    setTimeout(() => input.focus(), 30);
+  });
+}
+
+fieldCategory.addEventListener("change", async () => {
+  if (!state.current) return;
+  const pres = state.current;
+  let value = fieldCategory.value;
+  if (value === NEW_CATEGORY_VALUE) {
+    fieldCategory.value = state.categories.some((c) => c.id === pres.categoryId) ? pres.categoryId : "";
+    const name = await promptCategoryName();
+    if (name === null) return;
+    value = await createCategory(name);
+    if (!value) return;
+  }
+  const categoryId = value || null;
+  pres.categoryId = categoryId;
+  renderCategorySelect();
+  const listed = state.presentations.find((p) => p.id === pres.id);
+  if (listed) listed.categoryId = categoryId;
+  try {
+    await setPresentationCategory(pres.id, categoryId);
+    const name = state.categories.find((c) => c.id === categoryId)?.name;
+    toast(name ? `Rangée dans « ${name} »` : "Retirée de sa catégorie");
+  } catch (err) {
+    toast(err.message, 4000);
+  }
+});
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -361,13 +747,14 @@ async function deleteFromDashboard(pres) {
   }
 }
 
-async function createNew() {
-  const id = await createPresentation(state.user.uid, state.user.email);
+async function createNew(categoryId = null) {
+  const valid = state.categories.some((c) => c.id === categoryId) ? categoryId : null;
+  const id = await createPresentation(state.user.uid, state.user.email, valid);
   openEditor(id);
 }
 
-document.getElementById("btn-new").addEventListener("click", createNew);
-document.getElementById("btn-new-empty").addEventListener("click", createNew);
+document.getElementById("btn-new").addEventListener("click", () => createNew());
+document.getElementById("btn-new-empty").addEventListener("click", () => createNew());
 
 /* ---------------- Editor ---------------- */
 
@@ -400,6 +787,7 @@ async function openEditor(id) {
     ownerId: pres.ownerId,
     title: pres.title || "Sans titre",
     showTitle: !!pres.showTitle,
+    categoryId: pres.categoryId || null,
     // Older confidences have no writtenAt: fall back to their creation day.
     writtenAt: pres.writtenAt || timestampToISO(pres.createdAt) || todayISO(),
     slides: pres.slides && pres.slides.length ? pres.slides : [emptySlide()]
@@ -410,6 +798,7 @@ async function openEditor(id) {
   if (applyOrientation(deckOrientation(state.current.slides))) flushSave(true);
 
   editorTitle.value = state.current.title;
+  renderCategorySelect();
   fieldShowTitle.checked = state.current.showTitle;
   fieldWrittenAt.value = state.current.writtenAt;
   fieldWrittenAtWrap.hidden = !state.current.showTitle;

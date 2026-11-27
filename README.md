@@ -30,6 +30,12 @@ Site statique en JavaScript natif (pas de framework, pas de build) + Firebase (A
   - d'un **lien** : l'image est téléchargée puis copiée dans la confidence, comme un fichier. Elle reste donc visible si le lien disparaît, et le site d'origine ne voit jamais les lecteurs. Le site doit autoriser cette récupération (CORS) — c'est le cas de nombreux hébergeurs d'images, pas de tous ; sinon un message invite à enregistrer l'image puis à l'importer comme fichier.
 
   Les images sont compressées dans le navigateur puis stockées directement dans Firestore (en base64), il n'y a pas de Firebase Storage à activer ni à payer.
+- **Catégories** : le bouton « pile » du tableau de bord ouvre une fenêtre pour créer, renommer (clic sur le nom) et supprimer des catégories — par personne, par thème… Le tableau de bord affiche une ligne par catégorie, avec ses confidences côte à côte (la ligne défile horizontalement), puis une ligne « Sans catégorie ». Pour ranger une confidence :
+  - dans l'éditeur, avec le sélecteur « Catégorie » (qui permet aussi d'en créer une à la volée) ;
+  - par **glisser-déposer** d'une carte vers une autre ligne (souris, ou appui long puis glisser sur mobile ; la page défile près des bords, Échap annule) ;
+  - en créant directement la confidence depuis une ligne, avec son bouton « + Nouvelle ».
+
+  Supprimer une catégorie ne supprime aucune confidence : elles repassent « Sans catégorie ». Sans aucune catégorie, le tableau de bord garde sa grille simple. Ranger une confidence ne change pas sa date de modification.
 - **Partage** : un lien (`view.html?id=...`) est généré automatiquement. Un nom donné à la confidence ne sert qu'à la retrouver dans son propre tableau de bord. Un QR code est aussi généré pour chaque confidence (bouton "QR code"), avec téléchargement en PNG.
 - **Lecture** : quiconque possède le lien peut lire le diaporama, sans se connecter. On tape à droite/gauche de l'écran (ou on glisse le doigt) pour passer à la page suivante/précédente. Sur téléphone ou tablette, si l'écran n'est pas dans le sens des pages (téléphone vertical pour une confidence en paysage, ou l'inverse), un pictogramme animé propose de pivoter l'appareil. Il disparaît de lui-même au bout de 2 secondes, dès que l'écran est dans le bon sens, ou dès qu'on passe à la page suivante, et ne réapparaît plus ensuite ; il ne bloque jamais la navigation.
 - **Statistiques** : le créateur voit, dans l'éditeur, le nombre de vues et, pour chaque consultation : la date et l'heure, la **progression** (page la plus loin atteinte, ou « Lue en entier »), la **durée de lecture** (temps passé avec l'onglet visible) et le **type d'appareil** (mobile, tablette ou ordinateur, déduit de l'écran). Un résumé indique combien de lectures sont allées jusqu'au bout, la durée médiane et la répartition des appareils (sur les 50 dernières consultations). Aucune donnée permettant d'identifier le lecteur n'est collectée (ni adresse IP, ni identifiant). La progression et la durée sont envoyées au fil de la lecture (changement de page, toutes les 15 s, et quand l'onglet est masqué) ; une fermeture brutale peut donc faire perdre les toutes dernières secondes. Les consultations enregistrées avant cette version n'affichent que leur date.
@@ -55,6 +61,8 @@ Confidences/
 │   ├── auth.js
 │   ├── presentations.js # CRUD Firestore (confidences, vues)
 │   ├── image-utils.js   # compression d'image côté navigateur (vers base64)
+│   ├── categories.js    # catégories de confidences (Firestore)
+│   ├── category-dnd.js  # glisser-déposer des cartes vers une catégorie
 │   ├── color-field.js   # champ couleur : saisie HEX + couleurs récentes
 │   ├── image-sources.js # sources d'image : caméra (aperçu webcam) et import depuis un lien
 │   ├── slide-render.js  # rendu d'une page, partagé éditeur + lecteur
@@ -79,12 +87,14 @@ Le projet est déjà relié au projet Firebase `confidences-2dd1d` (voir `js/fir
 
 ### Modèle de données
 
-- `presentations/{id}` : `ownerId`, `ownerEmail`, `title`, `slides` (tableau de pages — les images y sont stockées en base64 ; chaque page porte notamment `image.posX` / `image.posY` (0–100 %), `image.scale`, `image.borderWidth`, `image.borderColor` et `transition: { type, speed }`), `viewCount`, `createdAt`, `updatedAt`.
+- `users/{uid}` : `categories` (liste ordonnée de `{ id, name }`, 50 au maximum), `updatedAt`.
+- `presentations/{id}` : `ownerId`, `ownerEmail`, `title`, `categoryId` (ou `null`), `slides` (tableau de pages — les images y sont stockées en base64 ; chaque page porte notamment `image.posX` / `image.posY` (0–100 %), `image.scale`, `image.borderWidth`, `image.borderColor` et `transition: { type, speed }`), `viewCount`, `createdAt`, `updatedAt`.
 - `presentations/{id}/views/{viewId}` : `viewedAt`, `lastActiveAt`, `device` (`mobile` / `tablette` / `ordinateur`), `slideCount`, `maxSlide`, `completed`, `durationMs` — un document par consultation.
 
 ### Règles de sécurité
 
 - Une confidence ne peut être **lue par son identifiant exact** que par son propriétaire (gestion) ou par le lecteur public (`get`, sans possibilité de lister toutes les confidences). C'est le même principe qu'un lien de partage "privé mais non listé" (comme un Google Doc "toute personne disposant du lien").
+- Le document `users/{uid}` (catégories) n'est lisible et modifiable que par ce compte.
 - Seul le propriétaire peut créer, modifier ou supprimer ses confidences ; n'importe qui disposant du lien peut uniquement faire avancer le compteur de vues (`viewCount`).
 - Une consultation est créée avec des champs strictement contrôlés ; ensuite, le lecteur ne peut que faire **avancer** sa progression et sa durée (jamais les diminuer, ni dépasser le nombre de pages ou 24 h). Seul le propriétaire peut lire l'historique, et le supprimer avec la confidence.
 

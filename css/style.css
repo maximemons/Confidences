@@ -1552,3 +1552,278 @@ input[type="color"]:disabled {
   opacity: 0.8;
 }
 
+
+/* --- Tableau de bord : catégories (une ligne par catégorie) --- */
+
+.dashboard-top__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn--categories {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.dashboard-hint {
+  margin: -8px 0 16px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.cat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cat-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 14px 0 6px;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cat-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 10px;
+}
+
+.cat-row__title {
+  margin: 0;
+  font-size: 1.05rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cat-row__count {
+  flex: 0 0 auto;
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.cat-row__new {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* Les blocs d'une catégorie, côte à côte ; la ligne défile horizontalement. */
+.cat-row__cards {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 16px 12px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cat-row__cards > .pres-card {
+  flex: 0 0 min(300px, 82vw);
+  scroll-snap-align: start;
+}
+
+.cat-row__empty {
+  flex: 1;
+  padding: 22px 16px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* Sans aucune catégorie : grille simple, comme avant. */
+.cat-rows--flat .cat-row {
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.cat-rows--flat .cat-row__cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  overflow: visible;
+  padding: 0;
+}
+
+.cat-rows--flat .cat-row__cards > .pres-card {
+  flex: none;
+}
+
+@media (min-width: 720px) {
+  .cat-rows--flat .cat-row__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1080px) {
+  .cat-rows--flat .cat-row__cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Glisser-déposer d'une carte vers une catégorie. */
+.pres-card {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+  transition: transform 0.18s ease, opacity 0.15s ease;
+}
+
+.pres-card .btn {
+  cursor: pointer;
+}
+
+.pres-card.is-pressing {
+  transform: scale(0.97);
+  transition-duration: 0.35s;
+}
+
+.pres-card.is-drag-source {
+  opacity: 0.3;
+}
+
+.pres-card--ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  z-index: 1000;
+  pointer-events: none;
+  cursor: grabbing;
+  border-color: var(--accent);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  transition: none;
+  will-change: transform;
+}
+
+html.is-dragging-card,
+html.is-dragging-card * {
+  cursor: grabbing !important;
+}
+
+.cat-rows.is-dragging .cat-row {
+  border-style: dashed;
+}
+
+.cat-row.is-drop-target {
+  border-style: solid !important;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pres-card {
+    transition: none;
+  }
+}
+
+/* --- Fenêtre de gestion des catégories --- */
+
+.modal--categories {
+  max-width: 440px;
+}
+
+.cat-manage__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cat-manage__icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.cat-manage__new {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 12px;
+}
+
+.cat-manage__new input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cat-manage__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.cat-manage__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cat-manage input.cat-manage__name,
+.cat-manage__item input.cat-manage__name {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border-color: transparent;
+  padding: 8px 10px;
+}
+
+.cat-manage__item input.cat-manage__name:hover {
+  border-color: var(--border);
+}
+
+.cat-manage__item input.cat-manage__name:focus {
+  background: var(--bg-input);
+  border-color: var(--accent);
+}
+
+.cat-manage__count {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.cat-manage__empty {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* --- Catégorie dans l'éditeur --- */
+
+.category-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.category-field select {
+  flex: 1;
+  min-width: 0;
+}

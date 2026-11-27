@@ -49,10 +49,11 @@ export function emptySlide() {
   };
 }
 
-export async function createPresentation(ownerId, ownerEmail) {
+export async function createPresentation(ownerId, ownerEmail, categoryId = null) {
   const ref = await addDoc(collection(db, PRESENTATIONS), {
     ownerId,
     ownerEmail: ownerEmail || "",
+    categoryId: categoryId || null,
     title: "Sans titre",
     showTitle: false,
     writtenAt: todayISO(),
