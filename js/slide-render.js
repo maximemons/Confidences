@@ -174,10 +174,11 @@ export function renderSlide(container, slide, options = {}) {
 
   const bg = document.createElement("div");
   bg.className = "slide__bg";
+  // La couleur de fond est toujours posée : une image de fond transparente
+  // laisse voir cette couleur au lieu d'un fond noir.
+  bg.style.backgroundColor = slide.background?.color || "#14141c";
   if (slide.background?.type === "image" && slide.background.imageUrl) {
     bg.style.backgroundImage = `url("${slide.background.imageUrl}")`;
-  } else {
-    bg.style.backgroundColor = slide.background?.color || "#14141c";
   }
   container.appendChild(bg);
 

@@ -33,6 +33,7 @@ import {
 } from "./slide-render.js";
 import { playTransition, finishTransitions } from "./transitions.js";
 import { enableSlideReorder } from "./slide-reorder.js";
+import { enhanceColorInput, setRecentColorsOwner } from "./color-field.js";
 
 // Limite technique de Firestore : 1 Mio (1 048 576 octets) par document.
 // On garde ~48 Ko de marge pour les autres champs (titre, e-mail, dates, noms de champs…).
@@ -270,6 +271,7 @@ watchAuth((user) => {
     return;
   }
   state.user = user;
+  setRecentColorsOwner(user.uid);
   headerUser.hidden = false;
   headerUserPhoto.src = user.photoURL || "";
   headerUserName.textContent = user.displayName || user.email || "";
@@ -721,11 +723,38 @@ function updateBoxControls(slide) {
       : "Auto : un fond uni (sombre ou clair selon la couleur du texte) apparaît uniquement quand la page a une photo.";
 }
 
+/**
+ * Nouvelle page : elle est insérée juste après la page affichée et reprend ses
+ * couleurs — fond (couleur ou image), couleur du texte et fond du texte.
+ * Une image de fond reprise est dupliquée dans le document ; si elle ne tient
+ * plus dans la limite de Firestore, la nouvelle page garde seulement la couleur.
+ */
 function addSlide() {
   const slide = emptySlide();
-  slide.orientation = deckOrientation(state.current.slides);
-  state.current.slides.push(slide);
-  state.slideIndex = state.current.slides.length - 1;
+  const slides = state.current.slides;
+  const previous = slides[state.slideIndex] || slides[slides.length - 1];
+  const insertAt = Math.min(slides.length, state.slideIndex + 1);
+  slide.orientation = deckOrientation(slides);
+  if (previous) {
+    const bg = previous.background || {};
+    slide.background = {
+      type: bg.type === "image" && bg.imageUrl ? "image" : "color",
+      color: bg.color || slide.background.color,
+      imageUrl: bg.type === "image" ? bg.imageUrl || "" : ""
+    };
+    const t = normalizeTextBox(previous);
+    slide.text.color = previous.text?.color || slide.text.color;
+    slide.text.boxMode = t.boxMode;
+    slide.text.boxColor = t.boxColor;
+    slide.text.boxOpacity = t.boxOpacity;
+  }
+  slides.splice(insertAt, 0, slide);
+  if (slide.background.imageUrl && estimateDocBytes() > MAX_DOC_BYTES) {
+    slide.background.type = "color";
+    slide.background.imageUrl = "";
+    toast("Plus assez de place pour reprendre l'image de fond : la nouvelle page garde seulement la couleur de fond.", 4500);
+  }
+  state.slideIndex = insertAt;
   flushSave(true);
   renderAll();
 }
@@ -805,6 +834,24 @@ fieldBgColor.addEventListener("input", () => {
   renderPreview();
 });
 fieldBgColor.addEventListener("change", () => flushSave(true));
+
+/* ---------------- Champs couleur (HEX + couleurs récentes) ---------------- */
+
+/** Couleurs déjà utilisées dans la confidence ouverte (proposées dans les champs couleur). */
+function deckColors() {
+  if (!state.current) return [];
+  const colors = [];
+  state.current.slides.forEach((s) => {
+    colors.push(s.background?.color, s.text?.color);
+    if (s.text?.boxMode === "color") colors.push(s.text.boxColor);
+    if (s.image?.url && s.image.borderWidth > 0) colors.push(s.image.borderColor);
+  });
+  return colors.filter(Boolean);
+}
+
+[fieldBgColor, fieldTextColor, fieldBoxColor, fieldImageBorderColor].forEach((input) =>
+  enhanceColorInput(input, { getDeckColors: deckColors })
+);
 
 /* ---------------- Import d'image : fichier, caméra ou lien ---------------- */
 

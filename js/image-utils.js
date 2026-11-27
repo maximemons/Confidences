@@ -4,6 +4,9 @@
 // (qualité / définition) ajustables, pas des limites techniques.
 const MAX_DIMENSION = 1280; // côté le plus long, en px
 const MIN_DIMENSION = 480; // on ne descend pas en dessous lors de l'ajustement
+// Le PNG (repli pour les images transparentes sans WebP) ne se règle pas en
+// qualité : seule la définition baisse, on s'autorise donc à descendre plus bas.
+const MIN_DIMENSION_PNG = 240;
 const INITIAL_QUALITY = 0.8;
 const MIN_QUALITY = 0.4;
 const QUALITY_STEP = 0.08;
@@ -28,11 +31,35 @@ function supportsWebp() {
   return webpSupport;
 }
 
-// WebP est ~25-35 % plus léger que JPEG à qualité égale. Safari ne sait pas
-// encoder en WebP via canvas : on retombe alors sur JPEG.
-function encode(canvas, quality) {
+// WebP est ~25-35 % plus léger que JPEG à qualité égale et conserve la
+// transparence. Safari ne sait pas encoder en WebP via canvas : on retombe
+// alors sur JPEG pour les photos, et sur PNG pour les images transparentes
+// (le JPEG n'a pas de canal alpha : le fond deviendrait opaque).
+function encode(canvas, quality, transparent) {
   if (supportsWebp()) return canvas.toDataURL("image/webp", quality);
+  if (transparent) return canvas.toDataURL("image/png");
   return canvas.toDataURL("image/jpeg", quality);
+}
+
+/** L'image a-t-elle des pixels (au moins partiellement) transparents ? */
+function hasTransparency(img) {
+  try {
+    const size = 256;
+    const scale = Math.min(1, size / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(img.width * scale));
+    c.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const data = ctx.getImageData(0, 0, c.width, c.height).data;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 250) return true;
+    }
+    return false;
+  } catch {
+    // En cas de doute, on préserve la transparence.
+    return true;
+  }
 }
 
 /**
@@ -50,6 +77,9 @@ export function compressImageToDataUrl(file, maxBytes = MAX_DATA_URL_BYTES) {
     );
   }
   return loadImage(file).then((img) => {
+    const transparent = hasTransparency(img);
+    const pngFallback = transparent && !supportsWebp();
+    const minDimension = pngFallback ? MIN_DIMENSION_PNG : MIN_DIMENSION;
     const longest = Math.max(img.width, img.height);
     let dimension = Math.min(MAX_DIMENSION, longest);
     const canvas = document.createElement("canvas");
@@ -59,16 +89,26 @@ export function compressImageToDataUrl(file, maxBytes = MAX_DATA_URL_BYTES) {
       const scale = dimension / longest;
       canvas.width = Math.max(1, Math.round(img.width * scale));
       canvas.height = Math.max(1, Math.round(img.height * scale));
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Fond blanc seulement pour les images opaques encodées en JPEG ; une
+      // image transparente garde son canal alpha (WebP ou PNG).
+      if (!transparent && !supportsWebp()) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      for (let quality = INITIAL_QUALITY; quality >= MIN_QUALITY - 1e-9; quality -= QUALITY_STEP) {
-        const dataUrl = encode(canvas, quality);
+      if (pngFallback) {
+        const dataUrl = encode(canvas, 1, true);
         if (dataUrl.length <= budget) return dataUrl;
+      } else {
+        for (let quality = INITIAL_QUALITY; quality >= MIN_QUALITY - 1e-9; quality -= QUALITY_STEP) {
+          const dataUrl = encode(canvas, quality, transparent);
+          if (dataUrl.length <= budget) return dataUrl;
+        }
       }
-      if (dimension <= MIN_DIMENSION) break;
-      dimension = Math.max(MIN_DIMENSION, Math.round(dimension * DIMENSION_STEP));
+      if (dimension <= minDimension) break;
+      dimension = Math.max(minDimension, Math.round(dimension * DIMENSION_STEP));
     }
     throw new Error("Plus assez de place dans cette confidence pour cette image. Retirez ou remplacez une autre image.");
   });

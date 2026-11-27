@@ -14,6 +14,12 @@ Site statique en JavaScript natif (pas de framework, pas de build) + Firebase (A
   - une image à afficher, son format (remplir / ajuster), sa **position** (boutons Haut / Centre / Bas et deux curseurs horizontal / vertical, centrés par défaut ; les boutons déplacent aussi les curseurs, un double-clic sur un curseur le recentre ; en mode « Remplir » pleine taille, les curseurs choisissent la partie de la photo affichée), sa **taille** (curseur de 10 à 100 % de la page) et un **contour** optionnel (épaisseur réglable au curseur et couleur au choix). Avec « Ajuster », le contour épouse l'image entière ; avec « Remplir », il entoure le cadre. Taille et épaisseur sont proportionnelles à la page : le rendu est identique en miniature, dans l'aperçu et en plein écran
   - une **transition** jouée à l'arrivée sur la page (aucune, fondu, glissement, montée, zoom, pivot, flou) et sa vitesse (rapide, normale, lente). Le bouton « Tester dans l'aperçu » la rejoue depuis la page précédente, et « Appliquer à toutes les pages » l'étend à toute la confidence. En revenant en arrière, l'effet est joué à l'envers. Les nouvelles pages utilisent un fondu par défaut ; les pages existantes n'ont pas de transition. Si le système demande de réduire les animations, un fondu bref est utilisé
 
+  **Couleurs** : chaque champ couleur combine le sélecteur du système, une saisie en **HEX** (`#E91E63`, `e91e63` ou la forme courte `#FC0` ; l'aperçu se met à jour dès que le code est complet, une saisie invalide revient à la couleur précédente) et un bouton ▾ qui affiche les **couleurs récentes** (les 12 dernières validées, mémorisées dans le navigateur pour chaque compte) ainsi que les couleurs déjà utilisées dans la confidence.
+
+  **Nouvelle page** : le bouton « + » insère la page juste après celle affichée, et elle reprend ses couleurs : fond (couleur, ou image de fond — qui est alors dupliquée ; s'il n'y a plus la place, seule la couleur est reprise), couleur du texte et fond du texte.
+
+  **Transparence** : les images sans fond (PNG, WebP… avec canal alpha) restent transparentes. Elles sont réencodées en WebP transparent, ou en PNG sur Safari, qui ne sait pas produire de WebP (le JPEG, sans transparence, n'est utilisé que pour les images opaques). Une image de fond transparente laisse voir la couleur de fond choisie. Les miniatures d'import affichent un damier pour rendre la transparence visible.
+
   L'ordre des pages se modifie avec les flèches ↑ / ↓ sous l'aperçu, ou par **glisser-déposer** dans la bande de miniatures : à la souris, on attrape une miniature et on la fait glisser ; sur mobile, on maintient le doigt appuyé sur une miniature (~0,35 s) puis on la fait glisser. La bande défile automatiquement près des bords et Échap annule le déplacement.
 
   Chaque photo (image affichée ou image de fond) peut venir :
@@ -47,6 +53,7 @@ Confidences/
 │   ├── auth.js
 │   ├── presentations.js # CRUD Firestore (confidences, vues)
 │   ├── image-utils.js   # compression d'image côté navigateur (vers base64)
+│   ├── color-field.js   # champ couleur : saisie HEX + couleurs récentes
 │   ├── image-sources.js # sources d'image : caméra (aperçu webcam) et import depuis un lien
 │   ├── slide-render.js  # rendu d'une page, partagé éditeur + lecteur
 │   ├── slide-reorder.js # glisser-déposer des miniatures (souris + appui long tactile)

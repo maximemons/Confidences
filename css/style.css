@@ -536,7 +536,8 @@ html.is-dragging-slide body {
   height: 48px;
   border-radius: 8px;
   object-fit: cover;
-  background: var(--bg-input);
+  /* Damier : rend visible la transparence d'une image importée. */
+  background: repeating-conic-gradient(#3a3a48 0% 25%, #2a2a36 0% 50%) 0 0 / 12px 12px;
   border: 1px solid var(--border);
 }
 
@@ -1277,6 +1278,136 @@ html.is-dragging-slide body {
 input[type="color"]:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* --- Champ couleur : pastille + HEX + couleurs récentes --- */
+
+.color-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+
+.color-field.is-disabled {
+  opacity: 0.45;
+}
+
+.color-field__native {
+  width: 32px;
+  height: 30px;
+  border-radius: 7px;
+  flex: 0 0 auto;
+}
+
+.color-field input.color-field__hex {
+  width: 5.6em;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: 600 0.85rem/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.color-field input.color-field__hex:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.color-field input.color-field__hex.is-invalid {
+  border-color: var(--danger);
+}
+
+.color-field__more {
+  width: 26px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.color-field__more:hover:not(:disabled),
+.color-field__more:focus-visible {
+  background: var(--border);
+  color: var(--text);
+}
+
+.color-field__more:disabled {
+  cursor: not-allowed;
+}
+
+.color-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 236px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.color-popover--end {
+  left: auto;
+  right: 0;
+}
+
+.color-popover__title {
+  margin: 0 0 6px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.color-popover__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.color-popover__grid + .color-popover__title {
+  margin-top: 12px;
+}
+
+.color-popover__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.color-swatch {
+  aspect-ratio: 1;
+  width: 100%;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.color-swatch:hover,
+.color-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.color-swatch.is-current {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
 }
 
 /* --- Sources d'image (fichier, caméra, lien) --- */
