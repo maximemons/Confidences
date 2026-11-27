@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Confidences</title>
+  <meta name="description" content="Crée des confidences privées, page par page, et partage-les par un simple lien." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="theme-color" content="#0f0f14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Poppins:wght@400;600&family=Caveat:wght@500;700&family=Merriweather:wght@400;700&family=Dancing+Script:wght@500;700&family=Montserrat:wght@400;600&family=Courier+Prime&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="index.html">
+      <span class="brand__mark"></span>
+      Confidences
+    </a>
+    <div id="header-user" class="user-chip" hidden>
+      <img id="header-user-photo" alt="" />
+      <span id="header-user-name"></span>
+      <button id="btn-logout" class="btn btn--ghost btn--sm" type="button">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-loading" class="loading-screen">
+      <div class="spinner" aria-label="Chargement"></div>
+    </section>
+
+    <section id="view-login" class="login-screen" hidden>
+      <div class="login-card">
+        <h1>Vos confidences, en toute intimité</h1>
+        <p>Créez un diaporama privé, texte et image, et partagez-le d'un simple lien.</p>
+        <button id="btn-google" class="btn btn--google btn--block" type="button">
+          Se connecter avec Google
+        </button>
+      </div>
+    </section>
+
+    <section id="view-dashboard" hidden>
+      <div class="dashboard-top">
+        <h2>Mes confidences</h2>
+        <button id="btn-new" class="btn btn--primary" type="button">+ Nouvelle confidence</button>
+      </div>
+      <div id="dashboard-empty" class="empty-state" hidden>
+        <p>Vous n'avez pas encore créé de confidence.</p>
+        <button id="btn-new-empty" class="btn btn--primary" type="button">Créer la première</button>
+      </div>
+      <div id="pres-grid" class="pres-grid"></div>
+    </section>
+
+    <section id="view-editor" hidden>
+      <div class="editor-topbar">
+        <button id="btn-back" class="btn btn--ghost btn--icon" type="button" title="Retour" aria-label="Retour">←</button>
+        <input id="editor-title" class="editor-topbar__title" type="text" maxlength="80" placeholder="Nom de la confidence" />
+        <button id="btn-preview" class="btn btn--ghost btn--sm" type="button">▶ Aperçu</button>
+        <button id="btn-delete-pres" class="btn btn--danger btn--sm" type="button">Supprimer</button>
+      </div>
+
+      <div class="share-box">
+        <input id="share-link" type="text" readonly />
+        <button id="btn-copy-link" class="btn btn--sm" type="button">⧉ Copier</button>
+        <button id="btn-show-qr" class="btn btn--sm" type="button">▦ QR code</button>
+      </div>
+
+      <div class="slide-strip" id="slide-strip"></div>
+
+      <div class="editor-grid">
+        <div class="editor-preview">
+          <div id="preview-slide" class="slide slide--portrait"></div>
+          <div class="slide-nav-mini">
+            <button id="btn-slide-up" class="btn btn--icon btn--sm" type="button" title="Déplacer avant">↑</button>
+            <span id="slide-position">1 / 1</span>
+            <button id="btn-slide-down" class="btn btn--icon btn--sm" type="button" title="Déplacer après">↓</button>
+            <button id="btn-slide-delete" class="btn btn--danger btn--sm" type="button">Supprimer la page</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="form-card" style="margin-bottom:16px;">
+            <h3>Orientation</h3>
+            <div class="segmented" id="field-orientation">
+              <button type="button" data-value="portrait">Portrait</button>
+              <button type="button" data-value="paysage">Paysage</button>
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-bottom:16px;">
+            <h3>Arrière-plan</h3>
+            <div class="segmented" id="field-bg-type" style="margin-bottom:14px;">
+              <button type="button" data-value="color">Couleur</button>
+              <button type="button" data-value="image">Image</button>
+            </div>
+            <div class="field" id="field-bg-color-wrap">
+              <label for="field-bg-color">Couleur de fond</label>
+              <input id="field-bg-color" type="color" value="#14141c" />
+            </div>
+            <div class="field" id="field-bg-image-wrap" hidden>
+              <label for="field-bg-image">Image de fond</label>
+              <div class="image-upload">
+                <img id="field-bg-image-preview" class="image-upload__preview" alt="" />
+                <input id="field-bg-image" type="file" accept="image/*" />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-bottom:16px;">
+            <h3>Texte</h3>
+            <div class="field">
+              <label for="field-text">Contenu</label>
+              <textarea id="field-text" maxlength="500" placeholder="Écrivez votre confidence…"></textarea>
+            </div>
+            <div class="field-row" style="margin-bottom:16px;">
+              <div class="field" style="flex:1;margin-bottom:0;">
+                <label for="field-font">Police</label>
+                <select id="field-font"></select>
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label for="field-text-color">Couleur</label>
+                <input id="field-text-color" type="color" value="#f5f0e8" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Taille</label>
+              <div class="segmented" id="field-text-size">
+                <button type="button" data-value="small">Petit</button>
+                <button type="button" data-value="medium">Moyen</button>
+                <button type="button" data-value="large">Grand</button>
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Position</label>
+              <div class="segmented" id="field-text-align">
+                <button type="button" data-value="top">Haut</button>
+                <button type="button" data-value="center">Centre</button>
+                <button type="button" data-value="bottom">Bas</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <h3>Image à afficher</h3>
+            <div class="field">
+              <div class="image-upload">
+                <img id="field-image-preview" class="image-upload__preview" alt="" />
+                <input id="field-image" type="file" accept="image/*" />
+                <button id="btn-remove-image" class="btn btn--ghost btn--sm" type="button" hidden>Retirer</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Format</label>
+              <div class="segmented" id="field-image-fit">
+                <button type="button" data-value="cover">Remplir</button>
+                <button type="button" data-value="contain">Ajuster</button>
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Position</label>
+              <div class="segmented" id="field-image-position">
+                <button type="button" data-value="top">Haut</button>
+                <button type="button" data-value="center">Centre</button>
+                <button type="button" data-value="bottom">Bas</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card views-panel">
+            <h3>Consultations</h3>
+            <div class="views-count" id="views-count">0</div>
+            <ul class="views-list" id="views-list"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
