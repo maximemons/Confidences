@@ -43,6 +43,58 @@ export function formatWrittenDate(iso) {
 }
 
 /**
+ * Complète les réglages du fond de texte pour les pages créées avant cette
+ * option : elles n'ont pas de fond (mode "none"), donc leur rendu ne change pas.
+ */
+export function normalizeTextBox(slide) {
+  const t = slide.text || (slide.text = {});
+  if (!["none", "auto", "color"].includes(t.boxMode)) t.boxMode = "none";
+  if (!/^#[0-9a-f]{6}$/i.test(t.boxColor || "")) t.boxColor = "#000000";
+  const op = Number(t.boxOpacity);
+  t.boxOpacity = Number.isFinite(op) ? Math.min(100, Math.max(0, Math.round(op))) : 85;
+  return t;
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0];
+}
+
+/** Luminance relative (0 = noir, 1 = blanc). */
+function luminance([r, g, b]) {
+  const lin = (v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+/** La page affiche-t-elle une photo (en fond ou en image) derrière le texte ? */
+function hasPhoto(slide) {
+  return (slide.background?.type === "image" && !!slide.background.imageUrl) || !!slide.image?.url;
+}
+
+/**
+ * Couleur CSS du fond derrière le texte, ou "" si aucun fond.
+ * - "color"  : la couleur choisie ;
+ * - "auto"   : seulement s'il y a une photo ; fond sombre pour un texte clair,
+ *              fond clair pour un texte sombre (contraste garanti).
+ */
+export function textBoxColor(slide) {
+  const t = normalizeTextBox({ ...slide, text: { ...(slide.text || {}) } });
+  let rgb;
+  if (t.boxMode === "color") {
+    rgb = hexToRgb(t.boxColor);
+  } else if (t.boxMode === "auto" && hasPhoto(slide)) {
+    const textLum = luminance(hexToRgb(slide.text?.color || "#f5f0e8"));
+    rgb = textLum > 0.4 ? [0, 0, 0] : [255, 255, 255];
+  } else {
+    return "";
+  }
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${t.boxOpacity / 100})`;
+}
+
+/**
  * @param {HTMLElement} container
  * @param {object} slide
  * @param {{ title?: string, date?: string }} [options] - when `title` is set,
@@ -83,13 +135,22 @@ export function renderSlide(container, slide, options = {}) {
     const textWrap = document.createElement("div");
     textWrap.className = `slide__text-wrap slide__text-wrap--${slide.text?.align || "center"}`;
 
+    // Boîte qui regroupe titre, date et texte : c'est elle qui porte le fond.
+    const textBox = document.createElement("div");
+    textBox.className = "slide__text-box";
+    const boxColor = textBoxColor(slide);
+    if (boxColor) {
+      textBox.classList.add("slide__text-box--filled");
+      textBox.style.backgroundColor = boxColor;
+    }
+
     if (title) {
       const h = document.createElement("h1");
       h.className = "slide__title";
       h.style.fontFamily = fontFamily;
       h.style.color = color;
       h.textContent = title;
-      textWrap.appendChild(h);
+      textBox.appendChild(h);
 
       const dateLabel = formatWrittenDate(options.date);
       if (dateLabel) {
@@ -99,7 +160,7 @@ export function renderSlide(container, slide, options = {}) {
         time.style.fontFamily = fontFamily;
         time.style.color = color;
         time.textContent = dateLabel;
-        textWrap.appendChild(time);
+        textBox.appendChild(time);
       }
     }
 
@@ -110,9 +171,10 @@ export function renderSlide(container, slide, options = {}) {
       body.style.fontFamily = fontFamily;
       body.style.color = color;
       body.innerHTML = markdownToHtml(slide.text.content);
-      textWrap.appendChild(body);
+      textBox.appendChild(body);
     }
 
+    textWrap.appendChild(textBox);
     container.appendChild(textWrap);
   }
 }
