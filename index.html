@@ -104,6 +104,7 @@
               <button type="button" data-value="portrait">Portrait</button>
               <button type="button" data-value="paysage">Paysage</button>
             </div>
+            <p class="field-hint">S'applique à toutes les pages de la confidence.</p>
           </div>
 
           <div class="form-card" style="margin-bottom:16px;">
@@ -128,8 +129,45 @@
           <div class="form-card" style="margin-bottom:16px;">
             <h3>Texte</h3>
             <div class="field">
-              <label for="field-text">Contenu</label>
-              <textarea id="field-text" maxlength="500" placeholder="Écrivez votre confidence…"></textarea>
+              <label for="field-text">Contenu (Markdown)</label>
+              <div class="md-toolbar" id="md-toolbar" role="toolbar" aria-label="Mise en forme">
+                <button type="button" data-md="bold" title="Gras (Ctrl+B)" aria-label="Gras"><strong>G</strong></button>
+                <button type="button" data-md="italic" title="Italique (Ctrl+I)" aria-label="Italique"><em>I</em></button>
+                <button type="button" data-md="strike" title="Barré" aria-label="Barré"><s>S</s></button>
+                <button type="button" data-md="mark" title="Surligné" aria-label="Surligné">▌</button>
+                <span class="md-toolbar__sep" aria-hidden="true"></span>
+                <button type="button" data-md="heading" title="Titre" aria-label="Titre">H</button>
+                <button type="button" data-md="ul" title="Liste à puces" aria-label="Liste à puces">•</button>
+                <button type="button" data-md="ol" title="Liste numérotée" aria-label="Liste numérotée">1.</button>
+                <button type="button" data-md="quote" title="Citation" aria-label="Citation">❝</button>
+                <span class="md-toolbar__sep" aria-hidden="true"></span>
+                <button type="button" data-md="link" title="Lien (Ctrl+K)" aria-label="Lien">🔗</button>
+                <button type="button" data-md="hr" title="Séparateur" aria-label="Séparateur">—</button>
+              </div>
+              <textarea id="field-text" maxlength="3000" placeholder="Écrivez votre confidence… (**gras**, *italique*, - liste, # titre)"></textarea>
+              <div class="md-meta">
+                <span>L'aperçu interprète le Markdown en direct.</span>
+                <span id="field-text-count">0 / 3000</span>
+              </div>
+              <p class="md-overflow" id="field-text-overflow" hidden>
+                Le texte dépasse de la page : réduisez la taille ou répartissez-le sur une autre page.
+              </p>
+              <details class="md-help">
+                <summary>Aide Markdown</summary>
+                <table>
+                  <tr><td><code># Titre</code> / <code>## Sous-titre</code></td><td>Titres</td></tr>
+                  <tr><td><code>**gras**</code></td><td><strong>gras</strong></td></tr>
+                  <tr><td><code>*italique*</code></td><td><em>italique</em></td></tr>
+                  <tr><td><code>~~barré~~</code></td><td><s>barré</s></td></tr>
+                  <tr><td><code>==surligné==</code></td><td>surligné</td></tr>
+                  <tr><td><code>- élément</code> / <code>1. élément</code></td><td>Listes (indentez de 2 espaces pour imbriquer)</td></tr>
+                  <tr><td><code>&gt; citation</code></td><td>Citation</td></tr>
+                  <tr><td><code>[texte](https://…)</code></td><td>Lien (s'ouvre dans un nouvel onglet)</td></tr>
+                  <tr><td><code>---</code></td><td>Séparateur</td></tr>
+                  <tr><td><code>`code`</code></td><td>Code</td></tr>
+                  <tr><td><code>\*</code></td><td>Afficher un caractère tel quel</td></tr>
+                </table>
+              </details>
             </div>
             <div class="field-row" style="margin-bottom:16px;">
               <div class="field" style="flex:1;margin-bottom:0;">
