@@ -592,6 +592,156 @@ input[type="color"] {
   font-size: clamp(1.6rem, 7.5vw, 2.7rem);
 }
 
+/* --- Texte Markdown des pages --- */
+
+.slide__md {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.slide__md > :first-child {
+  margin-top: 0;
+}
+
+.slide__md > :last-child {
+  margin-bottom: 0;
+}
+
+.slide__md p {
+  margin: 0 0 0.6em;
+}
+
+.slide__md h1,
+.slide__md h2,
+.slide__md h3,
+.slide__md h4,
+.slide__md h5,
+.slide__md h6 {
+  margin: 0.5em 0 0.35em;
+  font-family: inherit;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+
+.slide__md h1 {
+  font-size: 1.6em;
+}
+
+.slide__md h2 {
+  font-size: 1.35em;
+}
+
+.slide__md h3 {
+  font-size: 1.15em;
+}
+
+.slide__md h4,
+.slide__md h5,
+.slide__md h6 {
+  font-size: 1em;
+}
+
+/* Listes et citations alignées à gauche, mais centrées comme un bloc. */
+.slide__md ul,
+.slide__md ol,
+.slide__md blockquote {
+  display: table;
+  margin: 0 auto 0.6em;
+  text-align: left;
+}
+
+.slide__md ul,
+.slide__md ol {
+  padding-left: 1.3em;
+}
+
+.slide__md li + li,
+.slide__md li > ul,
+.slide__md li > ol {
+  margin-top: 0.2em;
+}
+
+.slide__md li > ul,
+.slide__md li > ol {
+  display: block;
+  margin: 0.2em 0 0;
+}
+
+.slide__md blockquote {
+  padding: 0.1em 0 0.1em 0.8em;
+  border-left: 3px solid currentColor;
+  border-left-color: color-mix(in srgb, currentColor 55%, transparent);
+  font-style: italic;
+}
+
+.slide__md blockquote p {
+  margin-bottom: 0.3em;
+}
+
+.slide__md blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.slide__md hr {
+  width: 40%;
+  margin: 0.9em auto;
+  border: 0;
+  border-top: 1px solid currentColor;
+  opacity: 0.5;
+}
+
+.slide__md code,
+.slide__md pre {
+  font-family: "Courier Prime", ui-monospace, monospace;
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  text-shadow: none;
+}
+
+.slide__md code {
+  padding: 0.05em 0.35em;
+}
+
+.slide__md pre {
+  margin: 0 0 0.6em;
+  padding: 0.6em 0.8em;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.slide__md pre code {
+  padding: 0;
+  background: none;
+  font-size: 1em;
+}
+
+.slide__md mark {
+  color: inherit;
+  background: rgba(240, 192, 138, 0.45);
+  border-radius: 4px;
+  padding: 0 0.15em;
+}
+
+/* Les liens restent cliquables malgré les zones de navigation du lecteur. */
+.slide__md a {
+  position: relative;
+  z-index: 6;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  pointer-events: auto;
+}
+
+.slide-thumb .slide__md {
+  font-size: 0.4rem;
+}
+
+.slide-thumb .slide__md a {
+  pointer-events: none;
+}
+
 .slide__title {
   margin: 0 0 0.45em;
   text-align: center;
@@ -627,6 +777,100 @@ input[type="color"] {
 .slide-thumb .slide__date {
   font-size: 0.4rem;
   margin-bottom: 0.6em;
+}
+
+/* --- Éditeur Markdown --- */
+
+.md-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.md-toolbar button {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.md-toolbar button:hover,
+.md-toolbar button:focus-visible {
+  border-color: var(--accent);
+}
+
+.md-toolbar__sep {
+  width: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+
+#field-text {
+  min-height: 160px;
+  font-family: "Courier Prime", ui-monospace, monospace;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.md-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.md-overflow {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+.md-overflow[hidden] {
+  display: none;
+}
+
+.md-help {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.md-help summary {
+  cursor: pointer;
+}
+
+.md-help table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.md-help td {
+  padding: 4px 6px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.md-help code {
+  font-family: "Courier Prime", ui-monospace, monospace;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.field-hint {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .check-field {
