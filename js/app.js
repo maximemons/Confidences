@@ -13,7 +13,14 @@ import {
   emptySlide
 } from "./presentations.js";
 import { compressImageToDataUrl } from "./image-utils.js";
-import { renderSlide, FONT_OPTIONS, todayISO, timestampToISO, deckOrientation } from "./slide-render.js";
+import {
+  renderSlide,
+  FONT_OPTIONS,
+  todayISO,
+  timestampToISO,
+  deckOrientation,
+  normalizeTextBox
+} from "./slide-render.js";
 
 const MAX_DOC_BYTES = 900000; // headroom under Firestore's 1 MiB per-document hard limit
 
@@ -57,6 +64,13 @@ const fieldFont = document.getElementById("field-font");
 const fieldTextColor = document.getElementById("field-text-color");
 const fieldTextSize = document.getElementById("field-text-size");
 const fieldTextAlign = document.getElementById("field-text-align");
+const fieldBoxMode = document.getElementById("field-box-mode");
+const fieldBoxHint = document.getElementById("field-box-hint");
+const fieldBoxOptions = document.getElementById("field-box-options");
+const fieldBoxColorWrap = document.getElementById("field-box-color-wrap");
+const fieldBoxColor = document.getElementById("field-box-color");
+const fieldBoxOpacity = document.getElementById("field-box-opacity");
+const fieldBoxOpacityValue = document.getElementById("field-box-opacity-value");
 const fieldImage = document.getElementById("field-image");
 const fieldImagePreview = document.getElementById("field-image-preview");
 const fieldImageFit = document.getElementById("field-image-fit");
@@ -556,6 +570,9 @@ function renderPreviewAndForm() {
   setSegmentedActive(fieldBgType, slide.background.type);
   setSegmentedActive(fieldTextSize, slide.text.size);
   setSegmentedActive(fieldTextAlign, slide.text.align);
+  normalizeTextBox(slide);
+  setSegmentedActive(fieldBoxMode, slide.text.boxMode);
+  updateBoxControls(slide);
   setSegmentedActive(fieldImageFit, slide.image.fit);
   setSegmentedActive(fieldImagePosition, slide.image.position);
 
@@ -575,6 +592,21 @@ function renderPreviewAndForm() {
   fieldImagePreview.src = slide.image.url || "";
   fieldImagePreview.style.visibility = slide.image.url ? "visible" : "hidden";
   btnRemoveImage.hidden = !slide.image.url;
+}
+
+/** Affiche les réglages du fond de texte qui correspondent au mode choisi. */
+function updateBoxControls(slide) {
+  const t = normalizeTextBox(slide);
+  fieldBoxOptions.hidden = t.boxMode === "none";
+  fieldBoxColorWrap.hidden = t.boxMode !== "color";
+  fieldBoxColor.value = t.boxColor;
+  fieldBoxOpacity.value = t.boxOpacity;
+  fieldBoxOpacityValue.textContent = t.boxOpacity;
+  fieldBoxHint.hidden = t.boxMode === "color";
+  fieldBoxHint.textContent =
+    t.boxMode === "none"
+      ? "Aucun fond derrière le texte."
+      : "Auto : un fond uni (sombre ou clair selon la couleur du texte) apparaît uniquement quand la page a une photo.";
 }
 
 function addSlide() {
@@ -837,12 +869,41 @@ fieldTextColor.addEventListener("input", () => {
   currentSlide().text.color = fieldTextColor.value;
   renderPreview();
 });
-fieldTextColor.addEventListener("change", () => flushSave(true));
+fieldTextColor.addEventListener("change", () => {
+  flushSave(true);
+  renderSlideStrip();
+});
 
 wireSegmented(fieldTextSize, (value) => {
   currentSlide().text.size = value;
   flushSave(true);
   renderAll();
+});
+
+wireSegmented(fieldBoxMode, (value) => {
+  normalizeTextBox(currentSlide()).boxMode = value;
+  updateBoxControls(currentSlide());
+  flushSave(true);
+  renderAll();
+});
+
+fieldBoxColor.addEventListener("input", () => {
+  normalizeTextBox(currentSlide()).boxColor = fieldBoxColor.value;
+  renderPreview();
+});
+fieldBoxColor.addEventListener("change", () => {
+  flushSave(true);
+  renderSlideStrip();
+});
+
+fieldBoxOpacity.addEventListener("input", () => {
+  normalizeTextBox(currentSlide()).boxOpacity = Number(fieldBoxOpacity.value);
+  fieldBoxOpacityValue.textContent = fieldBoxOpacity.value;
+  renderPreview();
+});
+fieldBoxOpacity.addEventListener("change", () => {
+  flushSave(true);
+  renderSlideStrip();
 });
 
 wireSegmented(fieldTextAlign, (value) => {
