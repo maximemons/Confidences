@@ -14,6 +14,13 @@ import {
 } from "./presentations.js";
 import { compressImageToDataUrl } from "./image-utils.js";
 import {
+  prefersNativeCamera,
+  hasLiveCamera,
+  captureFromCamera,
+  askImageUrl,
+  fetchImageFromUrl
+} from "./image-sources.js";
+import {
   renderSlide,
   FONT_OPTIONS,
   todayISO,
@@ -55,6 +62,7 @@ const previewSlide = document.getElementById("preview-slide");
 const slidePosition = document.getElementById("slide-position");
 const viewsCount = document.getElementById("views-count");
 const viewsList = document.getElementById("views-list");
+const viewsSummary = document.getElementById("views-summary");
 
 const fieldOrientation = document.getElementById("field-orientation");
 const fieldBgType = document.getElementById("field-bg-type");
@@ -83,6 +91,12 @@ const fieldImagePreview = document.getElementById("field-image-preview");
 const fieldImageFit = document.getElementById("field-image-fit");
 const fieldImagePosition = document.getElementById("field-image-position");
 const btnRemoveImage = document.getElementById("btn-remove-image");
+const fieldBgImageCamera = document.getElementById("field-bg-image-camera");
+const fieldImageCamera = document.getElementById("field-image-camera");
+const fieldImagePosX = document.getElementById("field-image-pos-x");
+const fieldImagePosY = document.getElementById("field-image-pos-y");
+const fieldImagePosXValue = document.getElementById("field-image-pos-x-value");
+const fieldImagePosYValue = document.getElementById("field-image-pos-y-value");
 const fieldImageScale = document.getElementById("field-image-scale");
 const fieldImageScaleValue = document.getElementById("field-image-scale-value");
 const fieldImageBorderWidth = document.getElementById("field-image-border-width");
@@ -662,7 +676,7 @@ function renderPreviewAndForm() {
   updateBoxControls(slide);
   const im = normalizeImage(slide);
   setSegmentedActive(fieldImageFit, im.fit);
-  setSegmentedActive(fieldImagePosition, im.position);
+  updatePositionControls(im);
   fieldImageScale.value = im.scale;
   fieldImageScaleValue.textContent = im.scale;
   fieldImageBorderWidth.value = im.borderWidth;
@@ -792,26 +806,111 @@ fieldBgColor.addEventListener("input", () => {
 });
 fieldBgColor.addEventListener("change", () => flushSave(true));
 
-fieldBgImage.addEventListener("change", async () => {
-  const file = fieldBgImage.files[0];
-  if (!file) return;
-  const previousUrl = currentSlide().background.imageUrl;
+/* ---------------- Import d'image : fichier, caméra ou lien ---------------- */
+
+// Emplacements d'image d'une page : la photo affichée et le fond.
+const IMAGE_SLOTS = {
+  image: {
+    get: (slide) => slide.image.url,
+    set: (slide, url) => {
+      slide.image.url = url;
+    },
+    clear: (s) => (s.image.url = ""),
+    fileInput: fieldImage,
+    cameraInput: fieldImageCamera
+  },
+  background: {
+    get: (slide) => slide.background.imageUrl,
+    set: (slide, url) => {
+      slide.background.imageUrl = url;
+      if (url) slide.background.type = "image";
+    },
+    clear: (s) => (s.background.imageUrl = ""),
+    fileInput: fieldBgImage,
+    cameraInput: fieldBgImageCamera
+  }
+};
+
+/**
+ * Compresse puis place une image dans un emplacement de la page courante.
+ * La page est mémorisée au départ : changer de page pendant la compression
+ * ne déplace pas l'image ailleurs.
+ */
+async function importImageToSlot(file, slotName) {
+  if (!file || !state.current) return;
+  const slot = IMAGE_SLOTS[slotName];
+  const slide = currentSlide();
+  const previousUrl = slot.get(slide);
+  const previousBgType = slide.background.type;
   try {
     toast("Compression de l'image…", 1500);
-    const dataUrl = await compressImageToDataUrl(file, imageBudget((s) => (s.background.imageUrl = "")));
-    currentSlide().background.imageUrl = dataUrl;
-    currentSlide().background.type = "image";
+    const dataUrl = await compressImageToDataUrl(file, imageBudget(slot.clear));
+    if (!state.current || !state.current.slides.includes(slide)) return;
+    slot.set(slide, dataUrl);
     if (estimateDocBytes() > MAX_DOC_BYTES) {
-      currentSlide().background.imageUrl = previousUrl;
+      slot.set(slide, previousUrl);
+      slide.background.type = previousBgType;
       toast("Cette confidence serait trop volumineuse avec cette image. Retirez ou remplacez une autre image.", 4000);
     } else {
       flushSave(true);
     }
     renderAll();
   } catch (err) {
-    toast(err.message);
+    toast(err.message, 4000);
   }
-  fieldBgImage.value = "";
+}
+
+Object.entries(IMAGE_SLOTS).forEach(([slotName, slot]) => {
+  [slot.fileInput, slot.cameraInput].forEach((input) => {
+    input.addEventListener("change", () => {
+      const file = input.files[0];
+      input.value = "";
+      importImageToSlot(file, slotName);
+    });
+  });
+});
+
+async function useCamera(slotName) {
+  const slot = IMAGE_SLOTS[slotName];
+  // Téléphone : l'appareil photo natif (meilleure qualité, flash, mise au point).
+  // Ordinateur : aperçu en direct de la webcam. Sinon : sélecteur de fichier.
+  if (prefersNativeCamera() || !hasLiveCamera()) {
+    slot.cameraInput.click();
+    return;
+  }
+  try {
+    const file = await captureFromCamera(modalRoot);
+    if (file) await importImageToSlot(file, slotName);
+  } catch (err) {
+    toast(err.message, 4000);
+  }
+}
+
+async function useLink(slotName, group) {
+  const url = await askImageUrl(modalRoot);
+  if (!url) return;
+  const wrap = group.closest(".image-upload");
+  wrap?.classList.add("is-busy");
+  try {
+    toast("Récupération de l'image…", 2500);
+    const file = await fetchImageFromUrl(url);
+    await importImageToSlot(file, slotName);
+  } catch (err) {
+    toast(err.message, 5000);
+  } finally {
+    wrap?.classList.remove("is-busy");
+  }
+}
+
+document.querySelectorAll(".image-source").forEach((group) => {
+  group.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-source]");
+    if (!btn || !state.current) return;
+    const slotName = group.dataset.slot;
+    if (btn.dataset.source === "file") IMAGE_SLOTS[slotName].fileInput.click();
+    else if (btn.dataset.source === "camera") useCamera(slotName);
+    else if (btn.dataset.source === "link") useLink(slotName, group);
+  });
 });
 
 let textFlush = null;
@@ -1036,27 +1135,6 @@ wireSegmented(fieldTextAlign, (value) => {
   renderAll();
 });
 
-fieldImage.addEventListener("change", async () => {
-  const file = fieldImage.files[0];
-  if (!file) return;
-  const previousUrl = currentSlide().image.url;
-  try {
-    toast("Compression de l'image…", 1500);
-    const dataUrl = await compressImageToDataUrl(file, imageBudget((s) => (s.image.url = "")));
-    currentSlide().image.url = dataUrl;
-    if (estimateDocBytes() > MAX_DOC_BYTES) {
-      currentSlide().image.url = previousUrl;
-      toast("Cette confidence serait trop volumineuse avec cette image. Retirez ou remplacez une autre image.", 4000);
-    } else {
-      flushSave(true);
-    }
-    renderAll();
-  } catch (err) {
-    toast(err.message);
-  }
-  fieldImage.value = "";
-});
-
 btnRemoveImage.addEventListener("click", () => {
   currentSlide().image.url = "";
   flushSave(true);
@@ -1069,10 +1147,74 @@ wireSegmented(fieldImageFit, (value) => {
   renderAll();
 });
 
+/* ---------------- Position de l'image ---------------- */
+
+// Les boutons Haut / Centre / Bas sont des raccourcis des curseurs :
+// Haut et Bas règlent la verticale, Centre recentre dans les deux sens.
+const POSITION_PRESETS = {
+  top: { posY: 0 },
+  center: { posX: 50, posY: 50 },
+  bottom: { posY: 100 }
+};
+
+function positionLabel(value, low, high) {
+  if (value === 50) return "Centre";
+  if (value === 0) return low;
+  if (value === 100) return high;
+  return `${value} %`;
+}
+
+/** Synchronise curseurs, libellés et boutons avec la position de l'image. */
+function updatePositionControls(im) {
+  fieldImagePosX.value = im.posX;
+  fieldImagePosY.value = im.posY;
+  fieldImagePosXValue.textContent = positionLabel(im.posX, "Gauche", "Droite");
+  fieldImagePosYValue.textContent = positionLabel(im.posY, "Haut", "Bas");
+  // Le bouton actif reflète la position verticale ; Centre seulement si
+  // l'image est centrée dans les deux sens.
+  const preset =
+    im.posY === 0 ? "top" : im.posY === 100 ? "bottom" : im.posY === 50 && im.posX === 50 ? "center" : "";
+  setSegmentedActive(fieldImagePosition, preset);
+}
+
+/** Conserve `position` (haut / centre / bas) cohérent pour les anciens lecteurs. */
+function syncLegacyPosition(im) {
+  im.position = im.posY <= 25 ? "top" : im.posY >= 75 ? "bottom" : "center";
+}
+
 wireSegmented(fieldImagePosition, (value) => {
-  currentSlide().image.position = value;
+  const im = normalizeImage(currentSlide());
+  Object.assign(im, POSITION_PRESETS[value]);
+  syncLegacyPosition(im);
+  updatePositionControls(im);
   flushSave(true);
   renderAll();
+});
+
+[
+  [fieldImagePosX, "posX"],
+  [fieldImagePosY, "posY"]
+].forEach(([input, key]) => {
+  input.addEventListener("input", () => {
+    const im = normalizeImage(currentSlide());
+    im[key] = Number(input.value);
+    syncLegacyPosition(im);
+    updatePositionControls(im);
+    renderPreview();
+  });
+  input.addEventListener("change", () => {
+    flushSave(true);
+    renderSlideStrip();
+  });
+  // Double-clic : retour au centre sur cet axe.
+  input.addEventListener("dblclick", () => {
+    const im = normalizeImage(currentSlide());
+    im[key] = 50;
+    syncLegacyPosition(im);
+    updatePositionControls(im);
+    flushSave(true);
+    renderAll();
+  });
 });
 
 /* ---------------- Taille et contour de l'image ---------------- */
@@ -1203,17 +1345,116 @@ btnTransitionAll.addEventListener("click", async () => {
   toast("Transition appliquée à toutes les pages");
 });
 
+/* ---------------- Récapitulatif des consultations ---------------- */
+
+const DEVICE_LABELS = {
+  mobile: { icon: "📱", label: "Mobile" },
+  tablette: { icon: "📱", label: "Tablette" },
+  ordinateur: { icon: "💻", label: "Ordinateur" }
+};
+
+/** 72 500 ms -> "1 min 13 s" ; < 1 s -> "< 1 s". */
+function formatDuration(ms) {
+  const total = Math.round((Number(ms) || 0) / 1000);
+  if (total < 1) return "< 1 s";
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h) return `${h} h ${String(m).padStart(2, "0")} min`;
+  if (m) return `${m} min ${String(sec).padStart(2, "0")} s`;
+  return `${sec} s`;
+}
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** Les consultations enregistrées avant ces statistiques n'ont que la date. */
+function hasDetails(v) {
+  return Number.isFinite(v.slideCount) && Number.isFinite(v.maxSlide);
+}
+
+function renderViewsSummary(list) {
+  const detailed = list.filter(hasDetails);
+  if (!detailed.length) {
+    viewsSummary.hidden = true;
+    return;
+  }
+  const completed = detailed.filter((v) => v.completed).length;
+  const devices = detailed.reduce((acc, v) => {
+    acc[v.device] = (acc[v.device] || 0) + 1;
+    return acc;
+  }, {});
+  const deviceText = Object.entries(DEVICE_LABELS)
+    .filter(([key]) => devices[key])
+    .map(([key, d]) => `${d.label} ${devices[key]}`)
+    .join(" · ");
+  viewsSummary.innerHTML = `
+    <div class="views-summary__item">
+      <span class="views-summary__value">${completed} / ${detailed.length}</span>
+      <span class="views-summary__label">lues en entier</span>
+    </div>
+    <div class="views-summary__item">
+      <span class="views-summary__value">${escapeHtml(formatDuration(median(detailed.map((v) => v.durationMs || 0))))}</span>
+      <span class="views-summary__label">durée médiane</span>
+    </div>
+    <div class="views-summary__item">
+      <span class="views-summary__value">${escapeHtml(deviceText || "—")}</span>
+      <span class="views-summary__label">appareils</span>
+    </div>`;
+  viewsSummary.hidden = false;
+}
+
 function renderViews(list) {
   viewsList.innerHTML = "";
+  renderViewsSummary(list);
   if (!list.length) {
     const li = document.createElement("li");
+    li.className = "views-list__empty";
     li.textContent = "Aucune consultation pour le moment.";
     viewsList.appendChild(li);
     return;
   }
   list.forEach((v, i) => {
     const li = document.createElement("li");
-    li.innerHTML = `<span>Consultation #${list.length - i}</span><span>${formatDate(v.viewedAt)}</span>`;
+    li.className = "view-item";
+
+    const head = document.createElement("div");
+    head.className = "view-item__head";
+    head.innerHTML = `<span class="view-item__num">Consultation #${list.length - i}</span><span>${escapeHtml(formatDate(v.viewedAt))}</span>`;
+    li.appendChild(head);
+
+    if (hasDetails(v)) {
+      const total = Math.max(1, v.slideCount);
+      const reached = Math.min(total, Math.max(1, v.maxSlide));
+      const pct = Math.round((reached / total) * 100);
+      const device = DEVICE_LABELS[v.device] || { icon: "❔", label: "Appareil inconnu" };
+
+      const progress = document.createElement("div");
+      progress.className = `view-item__progress${v.completed ? " is-complete" : ""}`;
+      progress.innerHTML = `
+        <div class="view-item__bar" role="progressbar" aria-valuemin="1" aria-valuemax="${total}" aria-valuenow="${reached}">
+          <div class="view-item__bar-fill" style="width:${pct}%"></div>
+        </div>
+        <span class="view-item__progress-label">${v.completed ? "✓ Lue en entier" : `Page ${reached} / ${total}`}</span>`;
+      li.appendChild(progress);
+
+      const meta = document.createElement("div");
+      meta.className = "view-item__meta";
+      meta.innerHTML = `
+        <span title="Type d'appareil">${device.icon} ${device.label}</span>
+        <span title="Durée de lecture (onglet visible)">⏱ ${escapeHtml(formatDuration(v.durationMs))}</span>`;
+      li.appendChild(meta);
+    } else {
+      const meta = document.createElement("div");
+      meta.className = "view-item__meta view-item__meta--legacy";
+      meta.textContent = "Détails non disponibles (consultation antérieure aux statistiques)";
+      li.appendChild(meta);
+    }
+
     viewsList.appendChild(li);
   });
 }

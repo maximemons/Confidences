@@ -17,11 +17,36 @@ service cloud.firestore {
 
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
 
+      // Une consultation = date, type d'appareil, progression et durée.
+      // Aucune donnée personnelle (ni IP, ni identifiant) n'est stockée.
       match /views/{viewId} {
-        allow create: if true;
-        allow read, list: if request.auth != null
+        allow create: if request.resource.data.keys().hasOnly([
+              "viewedAt", "lastActiveAt", "device", "slideCount", "maxSlide", "completed", "durationMs"])
+          && request.resource.data.viewedAt == request.time
+          && request.resource.data.lastActiveAt == request.time
+          && request.resource.data.device in ["mobile", "tablette", "ordinateur"]
+          && request.resource.data.slideCount is int
+          && request.resource.data.slideCount >= 1
+          && request.resource.data.slideCount <= 500
+          && request.resource.data.maxSlide == 1
+          && request.resource.data.completed is bool
+          && request.resource.data.durationMs == 0;
+
+        // Le lecteur fait seulement avancer sa progression et sa durée.
+        allow update: if request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(["maxSlide", "completed", "durationMs", "lastActiveAt"])
+          && request.resource.data.lastActiveAt == request.time
+          && request.resource.data.maxSlide is int
+          && request.resource.data.maxSlide >= resource.data.maxSlide
+          && request.resource.data.maxSlide <= resource.data.slideCount
+          && request.resource.data.completed == (request.resource.data.maxSlide == resource.data.slideCount)
+          && request.resource.data.durationMs is int
+          && request.resource.data.durationMs >= resource.data.durationMs
+          && request.resource.data.durationMs <= 86400000;
+
+        // Le propriétaire consulte l'historique et le supprime avec la confidence.
+        allow read, list, delete: if request.auth != null
           && request.auth.uid == get(/databases/$(database)/documents/presentations/$(presentationId)).data.ownerId;
-        allow update, delete: if false;
       }
     }
   }

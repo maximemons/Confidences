@@ -118,10 +118,16 @@
               <input id="field-bg-color" type="color" value="#14141c" />
             </div>
             <div class="field" id="field-bg-image-wrap" hidden>
-              <label for="field-bg-image">Image de fond</label>
+              <label>Image de fond</label>
               <div class="image-upload">
                 <img id="field-bg-image-preview" class="image-upload__preview" alt="" />
-                <input id="field-bg-image" type="file" accept="image/*" />
+                <div class="image-source" data-slot="background" role="group" aria-label="Source de l'image">
+                  <button type="button" class="btn btn--sm" data-source="file">📁 Fichier</button>
+                  <button type="button" class="btn btn--sm" data-source="camera">📷 Caméra</button>
+                  <button type="button" class="btn btn--sm" data-source="link">🔗 Lien</button>
+                </div>
+                <input id="field-bg-image" type="file" accept="image/*" hidden />
+                <input id="field-bg-image-camera" type="file" accept="image/*" capture="environment" hidden />
               </div>
             </div>
           </div>
@@ -223,7 +229,13 @@
             <div class="field">
               <div class="image-upload">
                 <img id="field-image-preview" class="image-upload__preview" alt="" />
-                <input id="field-image" type="file" accept="image/*" />
+                <div class="image-source" data-slot="image" role="group" aria-label="Source de l'image">
+                  <button type="button" class="btn btn--sm" data-source="file">📁 Fichier</button>
+                  <button type="button" class="btn btn--sm" data-source="camera">📷 Caméra</button>
+                  <button type="button" class="btn btn--sm" data-source="link">🔗 Lien</button>
+                </div>
+                <input id="field-image" type="file" accept="image/*" hidden />
+                <input id="field-image-camera" type="file" accept="image/*" capture="environment" hidden />
                 <button id="btn-remove-image" class="btn btn--ghost btn--sm" type="button" hidden>Retirer</button>
               </div>
             </div>
@@ -241,6 +253,19 @@
                 <button type="button" data-value="center">Centre</button>
                 <button type="button" data-value="bottom">Bas</button>
               </div>
+              <div class="position-sliders">
+                <div class="range-field">
+                  <label for="field-image-pos-x">Horizontale <span class="range-field__value" id="field-image-pos-x-value">Centre</span></label>
+                  <input id="field-image-pos-x" type="range" min="0" max="100" step="1" value="50" />
+                  <div class="range-field__ends" aria-hidden="true"><span>Gauche</span><span>Droite</span></div>
+                </div>
+                <div class="range-field">
+                  <label for="field-image-pos-y">Verticale <span class="range-field__value" id="field-image-pos-y-value">Centre</span></label>
+                  <input id="field-image-pos-y" type="range" min="0" max="100" step="1" value="50" />
+                  <div class="range-field__ends" aria-hidden="true"><span>Haut</span><span>Bas</span></div>
+                </div>
+              </div>
+              <p class="field-hint">Double-cliquez sur un curseur pour le recentrer. Avec « Remplir » en pleine taille, les curseurs choisissent la partie de la photo affichée.</p>
             </div>
             <div class="field range-field">
               <label for="field-image-scale">Taille <span class="range-field__value"><span id="field-image-scale-value">100</span> %</span></label>
@@ -287,7 +312,9 @@
           <div class="form-card views-panel">
             <h3>Consultations</h3>
             <div class="views-count" id="views-count">0</div>
+            <div class="views-summary" id="views-summary" hidden></div>
             <ul class="views-list" id="views-list"></ul>
+            <p class="field-hint">Progression, durée de lecture (onglet visible) et type d'appareil. Aucune donnée permettant d'identifier le lecteur n'est collectée, et vos propres lectures ne sont pas comptées.</p>
           </div>
         </div>
       </div>

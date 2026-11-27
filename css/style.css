@@ -554,18 +554,107 @@ html.is-dragging-slide body {
   list-style: none;
   margin: 12px 0 0;
   padding: 0;
-  max-height: 220px;
+  max-height: 360px;
   overflow-y: auto;
   border-top: 1px solid var(--border);
 }
 
 .views-list li {
-  padding: 9px 2px;
+  padding: 10px 2px;
   border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.views-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.views-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  min-width: 0;
+}
+
+.views-summary__value {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.views-summary__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.view-item__head {
   display: flex;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.view-item__num {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.view-item__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 7px;
+}
+
+.view-item__bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.view-item__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.view-item__progress.is-complete .view-item__bar-fill {
+  background: #7fc79a;
+}
+
+.view-item__progress-label {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  min-width: 92px;
+  text-align: right;
+}
+
+.view-item__progress.is-complete .view-item__progress-label {
+  color: #7fc79a;
+}
+
+.view-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 5px;
+  font-size: 0.78rem;
+}
+
+.view-item__meta--legacy {
+  font-style: italic;
+  opacity: 0.75;
 }
 
 /* --- Shared slide rendering (also used by reader) --- */
@@ -594,26 +683,16 @@ html.is-dragging-slide body {
 .slide__image-wrap {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   /* Les tailles et contours d'image sont exprimés en % de la page (cqw/cqh/cqmin). */
   container-type: size;
 }
 
-.slide__image-wrap--top {
-  align-items: flex-start;
-}
-
-.slide__image-wrap--bottom {
-  align-items: flex-end;
-}
-
 .slide__image {
+  position: absolute;
   width: 100%;
   height: 100%;
   max-width: none;
-  flex: 0 0 auto;
   display: block;
   box-sizing: border-box;
 }
@@ -1199,3 +1278,83 @@ input[type="color"]:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* --- Sources d'image (fichier, caméra, lien) --- */
+
+.image-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.image-upload.is-busy .image-source {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.modal__title {
+  font-family: "Playfair Display", serif;
+  font-size: 1.1rem;
+}
+
+.modal--camera {
+  max-width: 560px;
+}
+
+.camera-view {
+  position: relative;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 4 / 3;
+}
+
+.camera-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.camera-view__status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.modal__actions--spread {
+  flex-wrap: wrap;
+}
+
+.modal__spacer {
+  flex: 1;
+}
+
+.field-error {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+/* --- Position fine de l'image --- */
+
+.position-sliders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px 18px;
+  margin-top: 14px;
+}
+
+.range-field__ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+

@@ -39,6 +39,8 @@ export function emptySlide() {
       url: "",
       fit: "cover",
       position: "center",
+      posX: 50,
+      posY: 50,
       scale: 100,
       borderWidth: 0,
       borderColor: "#ffffff"
@@ -128,12 +130,34 @@ export async function deletePresentation(id) {
   await deleteDoc(doc(db, PRESENTATIONS, id));
 }
 
-export async function logView(id) {
-  await addDoc(collection(db, PRESENTATIONS, id, "views"), {
-    viewedAt: serverTimestamp()
+/**
+ * Enregistre une consultation et renvoie l'identifiant du document créé.
+ * Aucune donnée personnelle n'est collectée : seulement la date, le type
+ * d'appareil (déduit de l'écran) et, ensuite, la progression et la durée.
+ */
+export async function logView(id, { device, slideCount }) {
+  const ref = await addDoc(collection(db, PRESENTATIONS, id, "views"), {
+    viewedAt: serverTimestamp(),
+    lastActiveAt: serverTimestamp(),
+    device,
+    slideCount,
+    maxSlide: 1,
+    completed: slideCount <= 1,
+    durationMs: 0
   });
   await updateDoc(doc(db, PRESENTATIONS, id), {
     viewCount: increment(1)
+  });
+  return ref.id;
+}
+
+/** Met à jour la progression et la durée d'une consultation en cours. */
+export async function updateViewProgress(id, viewId, { maxSlide, completed, durationMs }) {
+  await updateDoc(doc(db, PRESENTATIONS, id, "views", viewId), {
+    maxSlide,
+    completed,
+    durationMs,
+    lastActiveAt: serverTimestamp()
   });
 }
 

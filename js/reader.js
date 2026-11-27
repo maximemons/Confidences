@@ -1,4 +1,4 @@
-import { getPresentation, logView } from "./presentations.js";
+import { getPresentation, logView, updateViewProgress } from "./presentations.js";
 import { renderSlide, timestampToISO, deckOrientation, normalizeTransition } from "./slide-render.js";
 import { playTransition } from "./transitions.js";
 import { watchAuth } from "./auth.js";
@@ -14,6 +14,7 @@ const elTapPrev = document.getElementById("tap-prev");
 const elTapNext = document.getElementById("tap-next");
 const elOwnerBar = document.getElementById("reader-owner-bar");
 const elOwnerSelect = document.getElementById("reader-owner-select");
+const elRotate = document.getElementById("reader-rotate");
 
 let slides = [];
 let title = "";
@@ -53,6 +54,105 @@ function dismissHint() {
   }, 400);
 }
 
+/* ---- Statistiques de lecture ----
+   Pour chaque consultation (hors créateur) : type d'appareil, page la plus
+   loin atteinte et durée de lecture active (onglet visible). Rien qui
+   permette d'identifier le lecteur. */
+
+/** Type d'appareil, déduit de l'écran (pas de l'adresse IP ni du user-agent). */
+function deviceType() {
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  if (!coarse) return "ordinateur";
+  const shortSide = Math.min(screen.width || innerWidth, screen.height || innerHeight);
+  return shortSide < 600 ? "mobile" : "tablette";
+}
+
+const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+
+const tracker = {
+  presentationId: null,
+  viewId: null,
+  slideCount: 0,
+  maxSlide: 1,
+  activeMs: 0,
+  visibleSince: null,
+  lastSent: null,
+  timer: null,
+  heartbeat: null,
+
+  async start(presentationId, slideCount) {
+    this.presentationId = presentationId;
+    this.slideCount = slideCount;
+    this.maxSlide = 1;
+    if (document.visibilityState === "visible") this.visibleSince = performance.now();
+    try {
+      this.viewId = await logView(presentationId, { device: deviceType(), slideCount });
+    } catch {
+      return;
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        this.visibleSince = performance.now();
+      } else {
+        this.pause();
+        this.flush();
+      }
+    });
+    window.addEventListener("pagehide", () => {
+      this.pause();
+      this.flush();
+    });
+    // Envoi régulier tant que la page est ouverte (la fermeture n'est pas
+    // toujours signalée de façon fiable sur mobile).
+    this.heartbeat = setInterval(() => {
+      if (document.visibilityState === "visible") this.schedule();
+    }, 15000);
+    this.flush();
+  },
+
+  pause() {
+    if (this.visibleSince !== null) {
+      this.activeMs += performance.now() - this.visibleSince;
+      this.visibleSince = null;
+    }
+  },
+
+  durationMs() {
+    const running = this.visibleSince !== null ? performance.now() - this.visibleSince : 0;
+    return Math.min(MAX_DURATION_MS, Math.round(this.activeMs + running));
+  },
+
+  onSlide(i) {
+    if (!this.presentationId) return;
+    const reached = Math.min(this.slideCount, i + 1);
+    if (reached > this.maxSlide) {
+      this.maxSlide = reached;
+      this.schedule(true);
+    }
+  },
+
+  schedule(soon = false) {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.flush(), soon ? 800 : 0);
+  },
+
+  flush() {
+    clearTimeout(this.timer);
+    if (!this.viewId) return;
+    const payload = {
+      maxSlide: this.maxSlide,
+      completed: this.maxSlide >= this.slideCount,
+      durationMs: this.durationMs()
+    };
+    const key = JSON.stringify(payload);
+    if (key === this.lastSent) return;
+    this.lastSent = key;
+    updateViewProgress(this.presentationId, this.viewId, payload).catch(() => {
+      this.lastSent = null;
+    });
+  }
+};
+
 function slideOptionsFor(i) {
   return showTitle && i === 0 ? { title, date: writtenAt } : {};
 }
@@ -69,6 +169,7 @@ function showSlide(i, { animate = true } = {}) {
   elFrame.classList.add(slide.orientation === "paysage" ? "slide--paysage" : "slide--portrait");
   updateProgress();
   if (elOwnerSelect) elOwnerSelect.value = String(index);
+  tracker.onSlide(index);
 
   if (!animate || from === i) {
     renderSlide(currentLayer, slide, slideOptionsFor(index));
@@ -108,6 +209,55 @@ function goTo(i) {
     return;
   }
   showSlide(i);
+  // Le conseil de rotation n'est proposé que sur la première page affichée.
+  if (i !== startIndex) dismissRotateHint();
+}
+
+/* ---- Conseil de rotation (mobile) ----
+   Sur téléphone ou tablette, si l'écran n'est pas dans le sens des pages
+   (écran vertical pour des pages paysage, ou l'inverse), on propose de pivoter.
+   Le conseil disparaît dès que l'écran est dans le bon sens, ou définitivement
+   quand on quitte la première page sans avoir tourné. */
+const touchDevice = window.matchMedia("(pointer: coarse) and (hover: none)");
+const portraitScreen = window.matchMedia("(orientation: portrait)");
+let deckIsPaysage = false;
+let rotateDismissed = false;
+let startIndex = 0;
+
+function isMismatched() {
+  return touchDevice.matches && portraitScreen.matches === deckIsPaysage;
+}
+
+function updateRotateHint() {
+  if (!elRotate) return;
+  const show = !rotateDismissed && isMismatched();
+  if (show) {
+    elRotate.hidden = false;
+    requestAnimationFrame(() => elRotate.classList.add("is-visible"));
+  } else if (!elRotate.hidden) {
+    elRotate.classList.remove("is-visible");
+    setTimeout(() => {
+      if (!elRotate.classList.contains("is-visible")) elRotate.hidden = true;
+    }, 350);
+  }
+}
+
+function dismissRotateHint() {
+  if (rotateDismissed) return;
+  rotateDismissed = true;
+  updateRotateHint();
+}
+
+function setupRotateHint() {
+  if (!elRotate) return;
+  deckIsPaysage = slides[0]?.orientation === "paysage";
+  elRotate.classList.toggle("reader__rotate--to-paysage", deckIsPaysage);
+  elRotate.querySelector(".reader__rotate-label").textContent = deckIsPaysage
+    ? "Tournez votre téléphone à l'horizontale pour un meilleur affichage"
+    : "Tournez votre téléphone à la verticale pour un meilleur affichage";
+  updateRotateHint();
+  portraitScreen.addEventListener?.("change", updateRotateHint);
+  window.addEventListener("orientationchange", () => setTimeout(updateRotateHint, 150));
 }
 
 function next() {
@@ -229,6 +379,7 @@ async function init() {
     if (Number.isFinite(wanted)) start = Math.min(slides.length, Math.max(1, wanted)) - 1;
   }
   index = start;
+  startIndex = start;
   showSlide(start, { animate: false });
   if (isOwner) setupOwnerBar();
 
@@ -236,8 +387,9 @@ async function init() {
   elReader.hidden = false;
 
   hintTimer = setTimeout(dismissHint, 3000);
+  setupRotateHint();
 
-  if (!isOwner) logView(id).catch(() => {});
+  if (!isOwner) tracker.start(id, slides.length);
 }
 
 function fail() {

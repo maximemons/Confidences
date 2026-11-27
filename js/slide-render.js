@@ -76,6 +76,14 @@ export function normalizeImage(slide) {
   const im = slide.image || (slide.image = { url: "" });
   if (!["cover", "contain"].includes(im.fit)) im.fit = "cover";
   if (!["top", "center", "bottom"].includes(im.position)) im.position = "center";
+  // Position fine en % (0 = gauche / haut, 100 = droite / bas). Les pages
+  // antérieures n'ont que `position` (haut / centre / bas) : on en déduit Y.
+  const clampPct = (v, fallback) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : fallback;
+  };
+  im.posX = clampPct(im.posX, 50);
+  im.posY = clampPct(im.posY, im.position === "top" ? 0 : im.position === "bottom" ? 100 : 50);
   const scale = Number(im.scale);
   im.scale = Number.isFinite(scale) ? Math.min(100, Math.max(10, Math.round(scale))) : 100;
   const bw = Number(im.borderWidth);
@@ -176,11 +184,16 @@ export function renderSlide(container, slide, options = {}) {
   if (slide.image?.url) {
     const im = normalizeImage(slide);
     const wrap = document.createElement("div");
-    wrap.className = `slide__image-wrap slide__image-wrap--${im.position}`;
+    wrap.className = "slide__image-wrap";
     const img = document.createElement("img");
     img.className = `slide__image slide__image--${im.fit}`;
-    img.style.objectPosition =
-      im.position === "top" ? "center top" : im.position === "bottom" ? "center bottom" : "center center";
+    // left/top en % de la page, puis translate en % de l'image : à 0 l'image
+    // touche le bord gauche/haut, à 100 le bord droit/bas, à 50 elle est centrée.
+    img.style.left = `${im.posX}%`;
+    img.style.top = `${im.posY}%`;
+    img.style.transform = `translate(-${im.posX}%, -${im.posY}%)`;
+    // En mode « Remplir », la même position choisit aussi le cadrage dans l'image.
+    img.style.objectPosition = `${im.posX}% ${im.posY}%`;
     applyImageSize(img, im);
     if (im.borderWidth > 0) {
       // Épaisseur relative au plus petit côté de la page : identique en miniature,

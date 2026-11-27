@@ -206,3 +206,70 @@ body {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* --- Conseil de rotation (mobile, orientation de l'écran ≠ orientation des pages) --- */
+
+.reader__rotate {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 7;
+  transform: translate(-50%, -50%) scale(0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(240px, 72vw);
+  padding: 18px 18px 16px;
+  border-radius: 20px;
+  background: rgba(10, 10, 14, 0.78);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  /* Ne bloque pas la navigation : on peut continuer à toucher l'écran. */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.reader__rotate.is-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.reader__rotate-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.reader__rotate-phone {
+  transform-origin: 32px 30px;
+  animation: rotate-to-paysage 2.4s ease-in-out infinite;
+}
+
+/* Pages portrait vues sur un écran horizontal : le téléphone part couché et se redresse. */
+.reader__rotate:not(.reader__rotate--to-paysage) .reader__rotate-phone {
+  animation-name: rotate-to-portrait;
+}
+
+@keyframes rotate-to-paysage {
+  0%, 25% { transform: rotate(0deg); }
+  55%, 85% { transform: rotate(90deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes rotate-to-portrait {
+  0%, 25% { transform: rotate(90deg); }
+  55%, 85% { transform: rotate(0deg); }
+  100% { transform: rotate(90deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader__rotate-phone {
+    animation: none;
+  }
+}

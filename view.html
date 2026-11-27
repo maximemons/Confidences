@@ -35,6 +35,17 @@
       <div class="reader__tap-zone reader__tap-zone--left" id="tap-prev"></div>
       <div class="reader__tap-zone reader__tap-zone--right" id="tap-next"></div>
       <div class="reader__hint" id="reader-hint">Touchez l'écran pour naviguer</div>
+      <div class="reader__rotate" id="reader-rotate" role="status" hidden>
+        <svg class="reader__rotate-icon" viewBox="0 0 64 64" aria-hidden="true">
+          <g class="reader__rotate-phone">
+            <rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="3" />
+            <line x1="28" y1="46" x2="36" y2="46" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          </g>
+          <path d="M50 14 a20 20 0 0 1 6 14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+          <path d="M53 26 l3 3 l3 -4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="reader__rotate-label"></span>
+      </div>
       <div class="reader__owner-bar" id="reader-owner-bar" hidden>
         <span class="reader__owner-badge" title="Vous êtes le créateur : vos lectures ne sont pas comptées">Créateur · non compté</span>
         <label class="reader__owner-jump">
