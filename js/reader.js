@@ -1,5 +1,5 @@
 import { getPresentation, logView } from "./presentations.js";
-import { renderSlide } from "./slide-render.js";
+import { renderSlide, timestampToISO } from "./slide-render.js";
 
 const elLoading = document.getElementById("reader-loading");
 const elError = document.getElementById("reader-error");
@@ -12,6 +12,9 @@ const elTapPrev = document.getElementById("tap-prev");
 const elTapNext = document.getElementById("tap-next");
 
 let slides = [];
+let title = "";
+let showTitle = false;
+let writtenAt = "";
 let index = 0;
 let hintTimer = null;
 
@@ -46,7 +49,7 @@ function dismissHint() {
 function showSlide(i) {
   index = i;
   const slide = slides[index];
-  renderSlide(elContent, slide);
+  renderSlide(elContent, slide, showTitle && index === 0 ? { title, date: writtenAt } : {});
   elFrame.classList.remove("slide--portrait", "slide--paysage");
   elFrame.classList.add(slide.orientation === "paysage" ? "slide--paysage" : "slide--portrait");
   updateProgress();
@@ -122,6 +125,10 @@ async function init() {
   }
 
   slides = presentation.slides;
+  title = (presentation.title || "").trim();
+  showTitle = !!presentation.showTitle;
+  writtenAt = presentation.writtenAt || timestampToISO(presentation.createdAt);
+  if (title) document.title = title;
   buildProgress();
   showSlide(0);
 
