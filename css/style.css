@@ -580,6 +580,29 @@ input[type="color"] {
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
 }
 
+/* Boîte regroupant titre, date et texte : porte le fond optionnel. */
+.slide__text-box {
+  align-self: center;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.slide__text-box--filled {
+  padding: 4% 5%;
+  border-radius: 14px;
+}
+
+/* Sur un fond uni, l'ombre portée n'est plus utile (et salirait le texte). */
+.slide__text-box--filled .slide__text,
+.slide__text-box--filled .slide__title,
+.slide__text-box--filled .slide__date {
+  text-shadow: none;
+}
+
+.slide-thumb .slide__text-box--filled {
+  border-radius: 4px;
+}
+
 .slide__text--small {
   font-size: clamp(1rem, 4vw, 1.3rem);
 }
@@ -871,6 +894,33 @@ input[type="color"] {
   margin: 8px 0 0;
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.box-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: flex-end;
+  margin-top: 14px;
+}
+
+.box-options[hidden],
+.box-options .field[hidden] {
+  display: none;
+}
+
+.box-options .field {
+  margin-bottom: 0;
+}
+
+.box-options__opacity {
+  flex: 1;
+  min-width: 160px;
+}
+
+.box-options input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
 }
 
 .check-field {
