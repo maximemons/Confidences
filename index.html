@@ -87,6 +87,18 @@
 
         <div>
           <div class="form-card" style="margin-bottom:16px;">
+            <h3>Titre</h3>
+            <label class="check-field" for="field-show-title">
+              <input id="field-show-title" type="checkbox" />
+              Afficher le titre sur la première page
+            </label>
+            <div class="field title-date-field" id="field-written-at-wrap" hidden>
+              <label for="field-written-at">Date d'écriture</label>
+              <input id="field-written-at" type="date" />
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-bottom:16px;">
             <h3>Orientation</h3>
             <div class="segmented" id="field-orientation">
               <button type="button" data-value="portrait">Portrait</button>
