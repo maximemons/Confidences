@@ -16,6 +16,7 @@ import {
   writeBatch
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { db } from "./firebase-config.js";
+import { todayISO } from "./slide-render.js";
 
 const PRESENTATIONS = "presentations";
 
@@ -34,6 +35,8 @@ export async function createPresentation(ownerId, ownerEmail) {
     ownerId,
     ownerEmail: ownerEmail || "",
     title: "Sans titre",
+    showTitle: false,
+    writtenAt: todayISO(),
     slides: [emptySlide()],
     viewCount: 0,
     createdAt: serverTimestamp(),
@@ -74,6 +77,20 @@ export async function renamePresentation(id, title) {
   });
 }
 
+export async function setShowTitle(id, showTitle) {
+  await updateDoc(doc(db, PRESENTATIONS, id), {
+    showTitle: !!showTitle,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function setWrittenAt(id, writtenAt) {
+  await updateDoc(doc(db, PRESENTATIONS, id), {
+    writtenAt,
+    updatedAt: serverTimestamp()
+  });
+}
+
 export async function saveSlides(id, slides) {
   await updateDoc(doc(db, PRESENTATIONS, id), {
     slides,
@@ -83,10 +100,15 @@ export async function saveSlides(id, slides) {
 
 export async function deletePresentation(id) {
   const viewsSnap = await getDocs(collection(db, PRESENTATIONS, id, "views"));
-  const batch = writeBatch(db);
-  viewsSnap.forEach((d) => batch.delete(d.ref));
-  batch.delete(doc(db, PRESENTATIONS, id));
-  await batch.commit();
+  const refs = viewsSnap.docs.map((d) => d.ref);
+  // Firestore batches are limited to 500 writes: delete views in chunks,
+  // then the presentation itself (rules check ownership on the parent).
+  for (let i = 0; i < refs.length; i += 450) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 450).forEach((r) => batch.delete(r));
+    await batch.commit();
+  }
+  await deleteDoc(doc(db, PRESENTATIONS, id));
 }
 
 export async function logView(id) {
