@@ -2,15 +2,15 @@
 
 Application web pour créer des messages privés sous forme de diaporama (texte, image ou les deux), page par page, et les partager via un simple lien ou un QR code.
 
-Site statique en JavaScript natif (pas de framework, pas de build) + Firebase (Auth, Firestore uniquement — pas de Storage), sur le même principe que [Aux-Fourneaux](https://github.com/maximemons/Aux-Fourneaux).
+Site statique en JavaScript natif (pas de framework, pas de build) + Firebase (Auth, Firestore uniquement — pas de Storage).
 
 ## Fonctionnement
 
 - **Authentification** : connexion avec Google (Firebase Auth). Seul le créateur peut créer/modifier/supprimer ses confidences.
 - **Création** : chaque confidence est un diaporama composé de pages ("diapos"). Pour chaque page on choisit :
-  - l'orientation (portrait ou paysage)
+  - l'orientation (portrait ou paysage) — elle est commune à toute la confidence : toutes les pages suivent l'orientation de la première
   - l'arrière-plan : une couleur ou une image
-  - le texte, sa police, sa couleur, sa taille et sa position
+  - le texte, écrit en **Markdown** (titres, gras, italique, barré, surligné, listes, citations, liens, séparateurs, code), avec sa police, sa couleur, sa taille et sa position. Une barre d'outils et des raccourcis (Ctrl/⌘+B, I, K) aident à la mise en forme, et l'aperçu interprète le Markdown en direct. Le HTML saisi n'est jamais interprété et seuls les liens `http(s)`, `mailto` et `tel` sont acceptés
   - une image à afficher, son format (remplir / ajuster) et sa position
 
   Les images sont compressées dans le navigateur puis stockées directement dans Firestore (en base64), il n'y a pas de Firebase Storage à activer ni à payer.
@@ -39,6 +39,7 @@ Confidences/
 │   ├── presentations.js # CRUD Firestore (confidences, vues)
 │   ├── image-utils.js   # compression d'image côté navigateur (vers base64)
 │   ├── slide-render.js  # rendu d'une page, partagé éditeur + lecteur
+│   ├── markdown.js      # moteur Markdown sans dépendance (HTML échappé)
 │   ├── app.js            # logique de index.html
 │   └── reader.js         # logique de view.html
 └── icons/
