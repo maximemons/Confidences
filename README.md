@@ -13,6 +13,8 @@ Site statique en JavaScript natif (pas de framework, pas de build) + Firebase (A
   - le texte, écrit en **Markdown** (titres, gras, italique, barré, surligné, listes, citations, liens, séparateurs, code), avec sa police, sa couleur, sa taille et sa position. Une barre d'outils et des raccourcis (Ctrl/⌘+B, I, K) aident à la mise en forme, et l'aperçu interprète le Markdown en direct. Le HTML saisi n'est jamais interprété et seuls les liens `http(s)`, `mailto` et `tel` sont acceptés
   - une image à afficher, son format (remplir / ajuster) et sa position
 
+  L'ordre des pages se modifie avec les flèches ↑ / ↓ sous l'aperçu, ou par **glisser-déposer** dans la bande de miniatures : à la souris, on attrape une miniature et on la fait glisser ; sur mobile, on maintient le doigt appuyé sur une miniature (~0,35 s) puis on la fait glisser. La bande défile automatiquement près des bords et Échap annule le déplacement.
+
   Les images sont compressées dans le navigateur puis stockées directement dans Firestore (en base64), il n'y a pas de Firebase Storage à activer ni à payer.
 - **Partage** : un lien (`view.html?id=...`) est généré automatiquement. Un nom donné à la confidence ne sert qu'à la retrouver dans son propre tableau de bord. Un QR code est aussi généré pour chaque confidence (bouton "QR code"), avec téléchargement en PNG.
 - **Lecture** : quiconque possède le lien peut lire le diaporama, sans se connecter. On tape à droite/gauche de l'écran (ou on glisse le doigt) pour passer à la page suivante/précédente.
@@ -39,6 +41,7 @@ Confidences/
 │   ├── presentations.js # CRUD Firestore (confidences, vues)
 │   ├── image-utils.js   # compression d'image côté navigateur (vers base64)
 │   ├── slide-render.js  # rendu d'une page, partagé éditeur + lecteur
+│   ├── slide-reorder.js # glisser-déposer des miniatures (souris + appui long tactile)
 │   ├── markdown.js      # moteur Markdown sans dépendance (HTML échappé)
 │   ├── app.js            # logique de index.html
 │   └── reader.js         # logique de view.html

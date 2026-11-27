@@ -21,6 +21,7 @@ import {
   deckOrientation,
   normalizeTextBox
 } from "./slide-render.js";
+import { enableSlideReorder } from "./slide-reorder.js";
 
 // Limite technique de Firestore : 1 Mio (1 048 576 octets) par document.
 // On garde ~48 Ko de marge pour les autres champs (titre, e-mail, dates, noms de champs…).
@@ -593,6 +594,8 @@ function renderSlideStrip() {
   state.current.slides.forEach((slide, i) => {
     const thumb = document.createElement("div");
     thumb.className = `slide-thumb slide--${slide.orientation === "paysage" ? "paysage" : "portrait"}`;
+    thumb.dataset.index = i;
+    thumb.title = "Cliquer pour modifier · maintenir et glisser pour déplacer";
     if (i === state.slideIndex) thumb.classList.add("is-active");
     const inner = document.createElement("div");
     inner.style.position = "absolute";
@@ -703,6 +706,29 @@ function moveSlide(delta) {
   flushSave(true);
   renderAll();
 }
+
+/**
+ * Applique un nouvel ordre issu du glisser-déposer.
+ * `order` liste les anciens index dans le nouvel ordre ; la page déplacée devient la page active.
+ */
+function reorderSlides(order, draggedIndex) {
+  const slides = state.current.slides;
+  if (order.length !== slides.length) {
+    renderSlideStrip();
+    return;
+  }
+  const dragged = slides[draggedIndex];
+  const reordered = order.map((i) => slides[i]);
+  slides.splice(0, slides.length, ...reordered);
+  state.slideIndex = Math.max(0, slides.indexOf(dragged));
+  flushSave(true);
+  renderAll();
+}
+
+enableSlideReorder(slideStrip, {
+  onReorder: reorderSlides,
+  onCancel: () => renderSlideStrip()
+});
 
 document.getElementById("btn-slide-delete").addEventListener("click", deleteSlide);
 document.getElementById("btn-slide-up").addEventListener("click", () => moveSlide(-1));

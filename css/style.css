@@ -397,6 +397,65 @@ input[type="color"] {
   border-color: var(--accent);
 }
 
+/* --- Réorganisation des pages par glisser-déposer --- */
+
+.slide-thumb {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.18s ease, opacity 0.15s ease;
+}
+
+.slide-thumb img {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.slide-thumb.is-pressing {
+  transform: scale(0.94);
+  transition-duration: 0.35s;
+}
+
+.slide-strip.is-reordering .slide-thumb {
+  cursor: grabbing;
+}
+
+.slide-thumb.is-drag-source {
+  opacity: 0.25;
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+.slide-thumb--ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  z-index: 1000;
+  pointer-events: none;
+  cursor: grabbing;
+  border-color: var(--accent);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+  transition: none;
+  will-change: transform;
+}
+
+html.is-dragging-slide,
+html.is-dragging-slide * {
+  cursor: grabbing !important;
+}
+
+html.is-dragging-slide body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-thumb {
+    transition: none;
+  }
+}
+
 .slide-thumb__index {
   position: absolute;
   bottom: 3px;
