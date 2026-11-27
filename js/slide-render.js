@@ -1,3 +1,5 @@
+import { markdownToHtml } from "./markdown.js";
+
 export const FONT_OPTIONS = [
   { value: "Inter", label: "Inter — moderne" },
   { value: "Playfair Display", label: "Playfair Display — élégant" },
@@ -8,6 +10,14 @@ export const FONT_OPTIONS = [
   { value: "Montserrat", label: "Montserrat — épuré" },
   { value: "Courier Prime", label: "Courier Prime — machine à écrire" }
 ];
+
+/**
+ * Toutes les pages d'une confidence partagent la même orientation :
+ * celle de la première page fait foi.
+ */
+export function deckOrientation(slides) {
+  return slides?.[0]?.orientation === "paysage" ? "paysage" : "portrait";
+}
 
 /** Today's date as "YYYY-MM-DD" in the local time zone. */
 export function todayISO() {
@@ -94,12 +104,13 @@ export function renderSlide(container, slide, options = {}) {
     }
 
     if (slide.text?.content) {
-      const p = document.createElement("p");
-      p.className = `slide__text slide__text--${slide.text.size || "medium"}`;
-      p.style.fontFamily = fontFamily;
-      p.style.color = color;
-      p.textContent = slide.text.content;
-      textWrap.appendChild(p);
+      // Le texte est écrit en Markdown ; markdownToHtml échappe tout HTML saisi.
+      const body = document.createElement("div");
+      body.className = `slide__text slide__md slide__text--${slide.text.size || "medium"}`;
+      body.style.fontFamily = fontFamily;
+      body.style.color = color;
+      body.innerHTML = markdownToHtml(slide.text.content);
+      textWrap.appendChild(body);
     }
 
     container.appendChild(textWrap);
