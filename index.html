@@ -126,6 +126,28 @@
           </div>
 
           <div class="form-card" style="margin-bottom:16px;">
+            <h3>Mot de passe</h3>
+            <label class="check-field" for="field-protect-enabled">
+              <input id="field-protect-enabled" type="checkbox" />
+              Protéger par un mot de passe
+            </label>
+            <div class="protect-options" id="field-protect-options" hidden>
+              <div class="field">
+                <label for="field-protect-password">Mot de passe demandé au lecteur</label>
+                <div class="protect-row">
+                  <input id="field-protect-password" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" maxlength="100" />
+                  <button id="btn-protect-toggle" class="btn btn--ghost btn--sm" type="button">Afficher</button>
+                </div>
+              </div>
+              <div class="protect-row">
+                <button id="btn-protect-apply" class="btn btn--primary btn--sm" type="button">Activer</button>
+                <span class="field-hint protect-status" id="field-protect-status" role="status"></span>
+              </div>
+              <p class="field-hint">Le lecteur devra saisir ce mot de passe avant de voir la moindre page. Le contenu est chiffré dans votre navigateur (AES-256) : sans le mot de passe, il reste illisible, même dans la base de données. Transmettez-le par un autre canal que le lien. Choisissez-en un d'au moins 8 caractères : un mot de passe court se devine plus facilement.</p>
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-bottom:16px;">
             <h3>Avis des lecteurs</h3>
             <label class="check-field" for="field-feedback-enabled">
               <input id="field-feedback-enabled" type="checkbox" />

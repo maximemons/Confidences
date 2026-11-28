@@ -37,6 +37,8 @@ Site statique en JavaScript natif (pas de framework, pas de build) + Firebase (A
 
   Supprimer une catégorie ne supprime aucune confidence : elles repassent « Sans catégorie ». Sans aucune catégorie, le tableau de bord garde sa grille simple. Ranger une confidence ne change pas sa date de modification.
 - **Avis des lecteurs** : dans l'éditeur, la case « Demander un avis à la fin » ajoute, après la dernière page, une page d'avis avec 5 étoiles à cocher. Elle affiche un message modifiable (pré-rempli avec un message de base, qu'un bouton permet de rétablir) et, si « Permettre un commentaire libre » est coché, un champ de texte (1 000 caractères max.). Cette page n'existe que dans le lecteur : elle n'apparaît pas dans l'éditeur. Elle reprend le fond et la police de la dernière page, arrive en fondu et compte dans la barre de progression. Le lecteur choisit une note, écrit éventuellement un mot, puis envoie ; un lien « Revoir la confidence » ramène au début. Le créateur peut la voir avec « ▶ Aperçu » (elle figure dans le sélecteur de pages), mais l'envoi y est désactivé. La note et le commentaire s'affichent dans l'historique des consultations, et le résumé indique la note moyenne et le nombre d'avis.
+- **Mot de passe** : dans l'éditeur, la carte « Mot de passe » permet de protéger la confidence (au moins 4 caractères, 8 conseillés). Le lecteur qui ouvre le lien voit alors un écran de saisie et ne voit **aucune page** (et n'est pas compté comme une lecture) tant qu'il n'a pas saisi le bon mot de passe. Le créateur peut le changer ou le retirer à tout moment ; il le retrouve (et peut l'afficher) dans l'éditeur, et son aperçu s'ouvre sans saisie. Les confidences protégées portent un 🔒 sur le tableau de bord. Voir « Protection par mot de passe » plus bas pour le fonctionnement et les limites.
+
 - **Partage** : un lien (`view.html?id=...`) est généré automatiquement. Un nom donné à la confidence ne sert qu'à la retrouver dans son propre tableau de bord. Un QR code est aussi généré pour chaque confidence (bouton "QR code"), avec téléchargement en PNG.
 - **Lecture** : quiconque possède le lien peut lire le diaporama, sans se connecter. On tape à droite/gauche de l'écran (ou on glisse le doigt) pour passer à la page suivante/précédente. Sur téléphone ou tablette, si l'écran n'est pas dans le sens des pages (téléphone vertical pour une confidence en paysage, ou l'inverse), un pictogramme animé propose de pivoter l'appareil. Il disparaît de lui-même au bout de 2 secondes, dès que l'écran est dans le bon sens, ou dès qu'on passe à la page suivante, et ne réapparaît plus ensuite ; il ne bloque jamais la navigation.
 - **Statistiques** : le créateur voit, dans l'éditeur, le nombre de vues et, pour chaque consultation : la date et l'heure, la **progression** (page la plus loin atteinte, ou « Lue en entier »), la **durée de lecture** (temps passé avec l'onglet visible) et le **type d'appareil** (mobile, tablette ou ordinateur, déduit de l'écran). Un résumé indique combien de lectures sont allées jusqu'au bout, la durée médiane et la répartition des appareils (sur les 50 dernières consultations). Aucune donnée permettant d'identifier le lecteur n'est collectée (ni adresse IP, ni identifiant). La progression et la durée sont envoyées au fil de la lecture (changement de page, toutes les 15 s, et quand l'onglet est masqué) ; une fermeture brutale peut donc faire perdre les toutes dernières secondes. Les consultations enregistrées avant cette version n'affichent que leur date.
@@ -61,6 +63,7 @@ Confidences/
 │   ├── firebase-config.js
 │   ├── auth.js
 │   ├── presentations.js # CRUD Firestore (confidences, vues)
+│   ├── crypto.js        # chiffrement AES-GCM / PBKDF2 des confidences protégées
 │   ├── image-utils.js   # compression d'image côté navigateur (vers base64)
 │   ├── categories.js    # catégories de confidences (Firestore)
 │   ├── category-dnd.js  # glisser-déposer des cartes vers une catégorie
@@ -90,6 +93,8 @@ Le projet est déjà relié au projet Firebase `confidences-2dd1d` (voir `js/fir
 
 - `users/{uid}` : `categories` (liste ordonnée de `{ id, name }`, 50 au maximum), `updatedAt`.
 - `presentations/{id}` : `ownerId`, `ownerEmail`, `title`, `categoryId` (ou `null`), `feedback` (`{ enabled, message, allowComment }`), `slides` (tableau de pages — les images y sont stockées en base64 ; chaque page porte notamment `image.posX` / `image.posY` (0–100 %), `image.scale`, `image.borderWidth`, `image.borderColor` et `transition: { type, speed }`), `viewCount`, `createdAt`, `updatedAt`.
+- `presentations/{id}` (si protégée) : `protection` (`{ enabled, salt, iterations, pages }`), `payload` (octets : pages chiffrées) et `slides` vide.
+- `presentations/{id}/private/protection` : `password` — mot de passe, lisible par le seul propriétaire, pour qu'il rouvre et modifie sa confidence sans le retaper.
 - `presentations/{id}/views/{viewId}` : `viewedAt`, `lastActiveAt`, `device` (`mobile` / `tablette` / `ordinateur`), `slideCount`, `maxSlide`, `completed`, `durationMs`, et si le lecteur a laissé un avis `rating` (1 à 5), `comment` (facultatif) et `feedbackAt` — un document par consultation.
 
 ### Règles de sécurité
@@ -98,6 +103,16 @@ Le projet est déjà relié au projet Firebase `confidences-2dd1d` (voir `js/fir
 - Le document `users/{uid}` (catégories) n'est lisible et modifiable que par ce compte.
 - Seul le propriétaire peut créer, modifier ou supprimer ses confidences ; n'importe qui disposant du lien peut uniquement faire avancer le compteur de vues (`viewCount`).
 - Une consultation est créée avec des champs strictement contrôlés ; ensuite, le lecteur ne peut que faire **avancer** sa progression et sa durée, et ajouter son avis (note entière de 1 à 5, commentaire de 1 000 caractères au plus) (jamais les diminuer, ni dépasser le nombre de pages ou 24 h). Seul le propriétaire peut lire l'historique, et le supprimer avec la confidence.
+
+## Protection par mot de passe
+
+Le contenu est **chiffré dans le navigateur** (Web Crypto) avant d'être écrit dans Firestore : une simple règle d'affichage serait contournable, puisque n'importe qui disposant du lien peut lire le document.
+
+- Clé : PBKDF2-SHA-256 (sel aléatoire, 600 000 itérations) → AES-256-GCM, IV aléatoire à chaque sauvegarde. Les pages sont compressées en gzip avant chiffrement quand le navigateur le permet (limite de 1 Mio par document).
+- Le lecteur déchiffre chez lui : le mot de passe n'est jamais envoyé nulle part. Un mauvais mot de passe est détecté par l'authentification GCM.
+- Le mot de passe est aussi stocké en clair dans `presentations/{id}/private/protection`, que les règles réservent au propriétaire. C'est un choix de confort (pas de perte de contenu si on l'oublie, aperçu sans saisie) ; sans ce document, un mot de passe oublié rendrait la confidence irrécupérable.
+- **Limites** : ce qui reste en clair dans Firestore — le titre, la catégorie, le nombre de pages, les réglages de la page d'avis, les statistiques de lecture et l'identité du propriétaire. La force de la protection dépend de celle du mot de passe (une attaque hors ligne reste possible sur un mot de passe faible). Les liens et QR codes existants restent valables ; retirer le mot de passe rend de nouveau le contenu lisible.
+- À déployer : `firebase deploy --only firestore:rules,hosting` (nouvelle règle pour `private/`).
 
 ## Lancer en local
 

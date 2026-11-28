@@ -30,6 +30,20 @@
     </div>
   </div>
 
+  <div id="reader-lock" class="reader" hidden>
+    <form id="reader-lock-form" class="reader__state reader__lock" autocomplete="off">
+      <svg class="reader__lock-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+        <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+      </svg>
+      <h1>Confidence protégée</h1>
+      <p>Saisissez le mot de passe pour la lire.</p>
+      <input id="reader-lock-input" class="reader__lock-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Mot de passe" aria-label="Mot de passe" required />
+      <button id="reader-lock-submit" class="reader__lock-btn" type="submit">Ouvrir</button>
+      <p id="reader-lock-error" class="reader__lock-error" role="alert"></p>
+    </form>
+  </div>
+
   <div id="reader" class="reader" hidden>
     <div id="reader-frame" class="reader__frame slide">
       <div id="reader-slide-content" class="reader__content"></div>

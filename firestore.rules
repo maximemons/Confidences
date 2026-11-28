@@ -28,6 +28,13 @@ service cloud.firestore {
 
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
 
+      // Mot de passe d'une confidence protégée : lisible et modifiable par son
+      // seul propriétaire (le contenu, lui, est chiffré dans le document parent).
+      match /private/{docId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/presentations/$(presentationId)).data.ownerId;
+      }
+
       // Une consultation = date, type d'appareil, progression et durée.
       // Aucune donnée personnelle (ni IP, ni identifiant) n'est stockée.
       match /views/{viewId} {

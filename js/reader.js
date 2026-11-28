@@ -1,4 +1,12 @@
-import { getPresentation, logView, updateViewProgress, updateViewFeedback } from "./presentations.js";
+import {
+  getPresentation,
+  logView,
+  updateViewProgress,
+  updateViewFeedback,
+  isProtected,
+  decryptPresentation,
+  getProtectionSecret
+} from "./presentations.js";
 import {
   renderSlide,
   timestampToISO,
@@ -12,6 +20,11 @@ import { watchAuth } from "./auth.js";
 
 const elLoading = document.getElementById("reader-loading");
 const elError = document.getElementById("reader-error");
+const elLock = document.getElementById("reader-lock");
+const elLockForm = document.getElementById("reader-lock-form");
+const elLockInput = document.getElementById("reader-lock-input");
+const elLockSubmit = document.getElementById("reader-lock-submit");
+const elLockError = document.getElementById("reader-lock-error");
 const elReader = document.getElementById("reader");
 const elFrame = document.getElementById("reader-frame");
 const elContent = document.getElementById("reader-slide-content");
@@ -529,6 +542,53 @@ function setupOwnerBar() {
   elReader.classList.add("reader--owner");
 }
 
+/**
+ * Écran du mot de passe : reste affiché jusqu'à ce que le lecteur saisisse le bon.
+ * Le déchiffrement se fait ici, dans le navigateur ; rien n'est affiché (ni compté
+ * comme une lecture) avant la réussite. Renvoie les pages déchiffrées.
+ */
+function askPassword(presentation) {
+  return new Promise((resolve) => {
+    elLoading.hidden = true;
+    elLock.hidden = false;
+    elLockInput.focus();
+    let busy = false;
+    elLockForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (busy) return;
+      const password = elLockInput.value;
+      if (!password) return;
+      busy = true;
+      elLockSubmit.disabled = true;
+      elLockSubmit.textContent = "Vérification…";
+      elLockError.textContent = "";
+      try {
+        const { slides: unlocked } = await decryptPresentation(presentation, password);
+        elLock.hidden = true;
+        elLockInput.value = "";
+        resolve(unlocked);
+      } catch {
+        elLockError.textContent = "Mot de passe incorrect.";
+        elLockInput.select();
+        busy = false;
+        elLockSubmit.disabled = false;
+        elLockSubmit.textContent = "Ouvrir";
+      }
+    });
+  });
+}
+
+/** Le créateur connecté n'a pas à retaper son mot de passe : il est lu dans son espace privé. */
+async function ownerUnlock(presentation) {
+  try {
+    const password = await getProtectionSecret(presentation.id);
+    if (!password) return null;
+    return (await decryptPresentation(presentation, password)).slides;
+  } catch {
+    return null;
+  }
+}
+
 async function init() {
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
@@ -542,12 +602,21 @@ async function init() {
     return fail();
   }
 
-  if (!presentation || !Array.isArray(presentation.slides) || presentation.slides.length === 0) {
-    return fail();
-  }
+  if (!presentation) return fail();
 
   // Le créateur qui relit sa confidence ne fait pas grimper le compteur.
   const isOwner = !!user && user.uid === presentation.ownerId;
+
+  // Confidence protégée : les pages sont chiffrées, on les obtient avec le mot de passe.
+  if (isProtected(presentation)) {
+    let unlocked = isOwner ? await ownerUnlock(presentation) : null;
+    if (!unlocked) unlocked = await askPassword(presentation);
+    presentation = { ...presentation, slides: unlocked };
+  }
+
+  if (!Array.isArray(presentation.slides) || presentation.slides.length === 0) {
+    return fail();
+  }
 
   // Toutes les pages suivent l'orientation de la première.
   const orientation = deckOrientation(presentation.slides);

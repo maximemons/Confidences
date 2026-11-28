@@ -449,3 +449,69 @@ body {
 .feedback__back:hover {
   color: #fff;
 }
+
+/* --- Écran du mot de passe --- */
+.reader__lock {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+  box-sizing: border-box;
+}
+
+.reader__lock h1 {
+  margin: 0;
+}
+
+.reader__lock p {
+  margin: 0;
+}
+
+.reader__lock-icon {
+  width: 44px;
+  height: 44px;
+  align-self: center;
+  color: #a3a0ae;
+}
+
+.reader__lock-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #3a3946;
+  background: #14141c;
+  color: #f5f0e8;
+  font: inherit;
+  font-size: 1rem; /* 16 px : évite le zoom automatique sur iOS */
+  text-align: center;
+}
+
+.reader__lock-input:focus {
+  outline: 2px solid #f5f0e8;
+  outline-offset: 2px;
+}
+
+.reader__lock-btn {
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #f5f0e8;
+  color: #14141c;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reader__lock-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.reader__lock-error {
+  min-height: 1.4em;
+  color: #ff8a80 !important;
+  font-size: 0.9rem;
+}

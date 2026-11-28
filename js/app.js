@@ -6,6 +6,13 @@ import {
   watchPresentation,
   renamePresentation,
   saveSlides,
+  isProtected,
+  getProtectionSecret,
+  setProtectionSecret,
+  unlockForEditing,
+  enableProtection,
+  disableProtection,
+  forgetEditorKey,
   setShowTitle,
   setWrittenAt,
   setFeedback,
@@ -66,6 +73,12 @@ const dashboardEmpty = document.getElementById("dashboard-empty");
 const presRows = document.getElementById("pres-rows");
 const dashboardHint = document.getElementById("dashboard-hint");
 const fieldCategory = document.getElementById("field-category");
+const fieldProtectEnabled = document.getElementById("field-protect-enabled");
+const fieldProtectOptions = document.getElementById("field-protect-options");
+const fieldProtectPassword = document.getElementById("field-protect-password");
+const btnProtectToggle = document.getElementById("btn-protect-toggle");
+const btnProtectApply = document.getElementById("btn-protect-apply");
+const fieldProtectStatus = document.getElementById("field-protect-status");
 const fieldFeedbackEnabled = document.getElementById("field-feedback-enabled");
 const fieldFeedbackOptions = document.getElementById("field-feedback-options");
 const fieldFeedbackMessage = document.getElementById("field-feedback-message");
@@ -337,11 +350,12 @@ function buildPresCard(pres) {
   const card = document.createElement("div");
   card.className = "pres-card";
   card.dataset.id = pres.id;
-  const pages = (pres.slides || []).length;
+  const locked = isProtected(pres);
+  const pages = locked ? pres.protection.pages || 0 : (pres.slides || []).length;
   const viewsN = pres.viewCount || 0;
   card.innerHTML = `
     <div class="pres-card__head">
-      <div class="pres-card__title">${escapeHtml(pres.title || "Sans titre")}</div>
+      <div class="pres-card__title">${locked ? '<span class="pres-card__lock" title="Protégée par un mot de passe" aria-label="Protégée par un mot de passe">🔒</span> ' : ""}${escapeHtml(pres.title || "Sans titre")}</div>
     </div>
     <div class="pres-card__meta">
       <span>${pages} page${pages > 1 ? "s" : ""}</span>
@@ -791,6 +805,27 @@ async function openEditor(id) {
     toast("Confidence introuvable");
     return;
   }
+  // Confidence protégée : on la déchiffre avec le mot de passe mémorisé pour son
+  // propriétaire (ou celui qu'il saisit s'il n'est pas disponible).
+  let slides = pres.slides;
+  let protection = { enabled: false, password: "" };
+  if (isProtected(pres)) {
+    let password = await getProtectionSecret(id).catch(() => null);
+    try {
+      slides = await unlockForEditing(pres, password ?? "");
+    } catch {
+      password = window.prompt("Cette confidence est protégée. Saisissez son mot de passe pour la modifier :");
+      if (password === null) return;
+      try {
+        slides = await unlockForEditing(pres, password);
+      } catch {
+        toast("Mot de passe incorrect", 4000);
+        return;
+      }
+      setProtectionSecret(id, password).catch(() => {});
+    }
+    protection = { enabled: true, password };
+  }
   state.current = {
     id: pres.id,
     ownerId: pres.ownerId,
@@ -800,7 +835,8 @@ async function openEditor(id) {
     feedback: normalizeFeedback(pres.feedback),
     // Older confidences have no writtenAt: fall back to their creation day.
     writtenAt: pres.writtenAt || timestampToISO(pres.createdAt) || todayISO(),
-    slides: pres.slides && pres.slides.length ? pres.slides : [emptySlide()]
+    protection,
+    slides: slides && slides.length ? slides : [emptySlide()]
   };
   state.slideIndex = 0;
   // Les anciennes confidences pouvaient mélanger les orientations :
@@ -810,6 +846,7 @@ async function openEditor(id) {
   editorTitle.value = state.current.title;
   renderCategorySelect();
   renderFeedbackForm();
+  renderProtectForm();
   fieldShowTitle.checked = state.current.showTitle;
   fieldWrittenAt.value = state.current.writtenAt;
   fieldWrittenAtWrap.hidden = !state.current.showTitle;
@@ -837,6 +874,8 @@ async function openEditor(id) {
 
 function backToDashboard() {
   flushSave(true);
+  // Les sauvegardes déjà lancées gardent leur propre référence à la clé.
+  if (state.current) forgetEditorKeyLater(state.current.id);
   teardownEditorSubs();
   state.current = null;
   document.title = APP_TITLE;
@@ -1284,6 +1323,121 @@ fieldBgColor.addEventListener("input", () => {
   renderPreview();
 });
 fieldBgColor.addEventListener("change", () => flushSave(true));
+
+/* ---------------- Mot de passe ---------------- */
+
+const MIN_PASSWORD_LENGTH = 4;
+
+// La clé reste utilisable le temps que la dernière sauvegarde parte.
+function forgetEditorKeyLater(id) {
+  setTimeout(() => {
+    if (state.current?.id !== id) forgetEditorKey(id);
+  }, 3000);
+}
+
+function setProtectStatus(text) {
+  fieldProtectStatus.textContent = text || "";
+}
+
+function renderProtectForm() {
+  const p = state.current.protection;
+  fieldProtectEnabled.checked = p.enabled;
+  fieldProtectOptions.hidden = !p.enabled;
+  fieldProtectPassword.value = p.enabled ? p.password : "";
+  fieldProtectPassword.type = "password";
+  btnProtectToggle.textContent = "Afficher";
+  btnProtectApply.textContent = "Changer";
+  btnProtectApply.disabled = true;
+  setProtectStatus(p.enabled ? "🔒 Active : le lecteur doit saisir ce mot de passe." : "");
+}
+
+fieldProtectEnabled.addEventListener("change", async () => {
+  if (!state.current) return;
+  const p = state.current.protection;
+  if (fieldProtectEnabled.checked) {
+    // Rien n'est protégé tant que le mot de passe n'est pas validé par « Activer ».
+    fieldProtectOptions.hidden = false;
+    fieldProtectPassword.value = "";
+    btnProtectApply.textContent = "Activer";
+    btnProtectApply.disabled = false;
+    setProtectStatus("");
+    fieldProtectPassword.focus();
+    return;
+  }
+  if (!p.enabled) {
+    fieldProtectOptions.hidden = true;
+    setProtectStatus("");
+    return;
+  }
+  if (!confirm("Retirer le mot de passe ? La confidence sera lisible par toute personne qui a le lien.")) {
+    fieldProtectEnabled.checked = true;
+    return;
+  }
+  fieldProtectEnabled.disabled = true;
+  try {
+    clearTimeout(saveTimer);
+    await disableProtection(state.current.id, state.current.slides);
+    p.enabled = false;
+    p.password = "";
+    toast("Mot de passe retiré");
+  } catch (err) {
+    toast(err.message, 4000);
+  }
+  fieldProtectEnabled.disabled = false;
+  renderProtectForm();
+});
+
+fieldProtectPassword.addEventListener("input", () => {
+  const p = state.current?.protection;
+  if (!p) return;
+  btnProtectApply.disabled = !fieldProtectPassword.value || (p.enabled && fieldProtectPassword.value === p.password);
+});
+
+fieldProtectPassword.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    btnProtectApply.click();
+  }
+});
+
+btnProtectToggle.addEventListener("click", () => {
+  const show = fieldProtectPassword.type === "password";
+  fieldProtectPassword.type = show ? "text" : "password";
+  btnProtectToggle.textContent = show ? "Masquer" : "Afficher";
+});
+
+btnProtectApply.addEventListener("click", async () => {
+  if (!state.current || btnProtectApply.disabled) return;
+  const password = fieldProtectPassword.value;
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    setProtectStatus(`Au moins ${MIN_PASSWORD_LENGTH} caractères.`);
+    return;
+  }
+  if (estimateDocBytes() > MAX_DOC_BYTES) {
+    toast("Cette confidence est trop volumineuse (images trop grandes). Remplacez ou retirez une image.", 4000);
+    return;
+  }
+  const previousLabel = btnProtectApply.textContent;
+  btnProtectApply.disabled = true;
+  fieldProtectPassword.disabled = true;
+  btnProtectApply.textContent = "Chiffrement…";
+  setProtectStatus("");
+  try {
+    // Les pages en attente de sauvegarde partent dans la version chiffrée.
+    clearTimeout(saveTimer);
+    await enableProtection(state.current.id, state.current.slides, password);
+    state.current.protection = { enabled: true, password };
+    toast("Mot de passe activé");
+  } catch (err) {
+    toast(err.message, 4000);
+    btnProtectApply.textContent = previousLabel;
+    btnProtectApply.disabled = false;
+    fieldProtectPassword.disabled = false;
+    return;
+  }
+  fieldProtectPassword.disabled = false;
+  renderProtectForm();
+});
 
 /* ---------------- Avis des lecteurs ---------------- */
 

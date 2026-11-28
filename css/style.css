@@ -1882,3 +1882,32 @@ html.is-dragging-card * {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* --- Mot de passe (éditeur) --- */
+.protect-options {
+  margin-top: 14px;
+}
+
+.protect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.protect-row input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.protect-options .field {
+  margin-bottom: 12px;
+}
+
+.protect-status {
+  margin: 0;
+}
+
+.pres-card__lock {
+  font-size: 0.85em;
+}
